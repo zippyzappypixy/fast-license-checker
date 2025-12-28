@@ -1,0 +1,60 @@
+# Clippy Configuration for Fast License Checker
+# 
+# This file configures clippy behavior and thresholds.
+# Lint levels (deny/warn/allow) are configured in Cargo.toml [lints.clippy] section.
+#
+# Reference: https://doc.rust-lang.org/clippy/configuration.html
+# Note: Only valid clippy configuration fields are used.
+
+# Cognitive complexity threshold for functions
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function body
+too-many-lines-threshold = 100
+
+# Maximum number of arguments a function can have
+too-many-arguments-threshold = 7
+
+# Maximum size of objects on the stack that are okay to pass by value
+pass-by-value-size-limit = 256
+
+# Maximum size of a stack-allocated array (in bytes)
+vec-box-size-threshold = 4096
+
+# Minimum number of single char bindings a scope can have
+single-char-binding-names-threshold = 4
+
+# Whether to allow certain borrows in `if let` and `match`
+matches-for-let-else = "WellKnownTypes"
+
+# The minimum rust version that the project supports
+msrv = "1.75.0"
+
+# Avoid linting on doc examples for private items
+check-private-items = false
+
+# Maximum size of the enum variant to not trigger large_enum_variant lint
+enum-variant-size-threshold = 200
+
+# Threshold for excessive nesting
+excessive-nesting-threshold = 10
+
+# Stack size threshold for too-large-for-stack lint
+too-large-for-stack = 200
+
+# List of disallowed macros (we use tracing, not println)
+disallowed-macros = [
+    { path = "std::println", reason = "Use tracing::info! instead" },
+    { path = "std::print", reason = "Use tracing::info! instead" },
+    { path = "std::eprintln", reason = "Use tracing::error! or tracing::warn! instead" },
+    { path = "std::eprint", reason = "Use tracing::error! or tracing::warn! instead" },
+    { path = "std::dbg", reason = "Use tracing::debug! instead" },
+]
+
+# List of disallowed methods
+disallowed-methods = [
+    { path = "std::option::Option::unwrap", reason = "Use `?` operator or handle the None case explicitly" },
+    { path = "std::option::Option::expect", reason = "Use `?` operator or handle the None case explicitly" },
+    { path = "std::result::Result::unwrap", reason = "Use `?` operator or handle the Err case explicitly" },
+    { path = "std::result::Result::expect", reason = "Use `?` operator or handle the Err case explicitly" },
+]

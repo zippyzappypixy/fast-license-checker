@@ -1,0 +1,123 @@
+# cargo-deny configuration for Fast License Checker
+#
+# This file configures cargo-deny for supply chain security.
+# Run: cargo deny check
+#
+# Reference: https://embarkstudios.github.io/cargo-deny/
+
+# Note: cargo-deny 0.18+ uses a new configuration format
+
+[graph]
+# Target platforms to check
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+# Don't include dev dependencies in checks
+exclude-dev = true
+
+# ============================================================================
+# ADVISORIES - Check for known security vulnerabilities
+# ============================================================================
+[advisories]
+# Path to the advisory database
+db-path = "~/.cargo/advisory-db"
+
+# URL to the advisory database git repository
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# How to handle unmaintained crates: "all", "workspace", "transitive", "none"
+unmaintained = "workspace"
+
+# How to handle yanked crates
+yanked = "warn"
+
+# List of advisory IDs to ignore (use sparingly, document why)
+ignore = [
+    # Example: "RUSTSEC-2020-0001", # reason for ignoring
+]
+
+# ============================================================================
+# LICENSES - Ensure all dependencies have acceptable licenses
+# ============================================================================
+[licenses]
+# List of explicitly allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "0BSD",
+]
+
+# Confidence threshold for license detection (0.0 to 1.0)
+confidence-threshold = 0.8
+
+# Private registries to allow
+private = { ignore = false }
+
+# Clarifications for crates with non-standard license declarations
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+# ============================================================================
+# BANS - Control which crates are allowed/denied
+# ============================================================================
+[bans]
+# Warn if multiple versions of the same crate are used (binary bloat)
+multiple-versions = "warn"
+
+# Warn about wildcard dependencies (*)
+wildcards = "warn"
+
+# Allow private workspace crates to use wildcard dependencies
+allow-wildcard-paths = true
+
+# Highlight crates that pull in the most duplicates
+highlight = "all"
+
+# List of crates to explicitly deny (security or quality concerns)
+deny = [
+    # Example: { crate = "openssl", wrappers = ["openssl-sys"] }
+]
+
+# Skip certain versions when checking for duplicates
+skip = [
+    # Example: { crate = "some-crate", version = "=1.0" }
+]
+
+# Skip entire dependency trees when checking for duplicates
+skip-tree = [
+    # Example: { crate = "some-crate" }
+]
+
+# ============================================================================
+# SOURCES - Control where crates can be fetched from
+# ============================================================================
+[sources]
+# Warn about crates from unknown registries
+unknown-registry = "warn"
+
+# Warn about crates fetched from git repositories
+unknown-git = "warn"
+
+# Allow all crates from crates.io
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Allow specific git repositories (use sparingly)
+allow-git = [
+    # Example: "https://github.com/example/repo"
+]

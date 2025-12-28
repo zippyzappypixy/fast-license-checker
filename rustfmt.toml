@@ -1,0 +1,48 @@
+# Rustfmt Configuration for Fast License Checker
+#
+# This file configures code formatting for consistency.
+# Run: cargo fmt
+#
+# Reference: https://rust-lang.github.io/rustfmt/
+# Note: Only stable options are used to ensure compatibility.
+
+# Rust edition
+edition = "2021"
+
+# Maximum width of each line
+max_width = 100
+
+# Use heuristics to determine formatting for items like arrays, structs, etc.
+# "Max" uses max_width for all width heuristics
+use_small_heuristics = "Max"
+
+# Unix-style line endings (LF)
+newline_style = "Unix"
+
+# Use field init shorthand: `Foo { x }` instead of `Foo { x: x }`
+use_field_init_shorthand = true
+
+# Use try shorthand: `?` instead of `try!`
+use_try_shorthand = true
+
+# Reorder imports alphabetically
+reorder_imports = true
+
+# Reorder module declarations alphabetically
+reorder_modules = true
+
+# Number of spaces for a tab
+tab_spaces = 4
+
+# Use spaces instead of tabs
+hard_tabs = false
+
+# Remove nested parens in patterns: `&(a, b)` -> `&(a, b)`
+remove_nested_parens = true
+
+# Put single-expression functions on a single line
+# Note: keeping this simple for stability
+# fn_single_line = false
+
+# Match arm leading pipes
+match_arm_leading_pipes = "Never"

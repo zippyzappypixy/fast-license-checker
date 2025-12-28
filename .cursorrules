@@ -1,0 +1,597 @@
+# Fast License Checker - Cursor AI Rules
+# =====================================
+#
+# This file configures Cursor AI to generate FAANG-quality Rust code
+# following the 7 Core Tenets for planet-scale development.
+#
+# Role: You are a senior Rust engineer building a high-performance CLI tool
+# for license header verification that must handle 100k+ files in under 1 second.
+
+## Project Overview
+
+Fast License Checker (flc) is a blazing-fast CLI tool and library for:
+- Scanning directories to find files missing license headers
+- Automatically fixing files by adding license headers
+- Respecting .gitignore and other ignore patterns
+- Supporting multiple comment styles per file extension
+
+Target: 100,000 files scanned in < 1 second (warm cache)
+
+## The 7 Core Tenets
+
+### Tenet 1: Security (Defense in Depth)
+
+**Principle:** Parse, don't validate. Make invalid states unrepresentable.
+
+**Requirements:**
+- Wrap ALL domain concepts in validated NewTypes
+- Never trust file content - detect binary, handle encoding errors gracefully
+- Validate inputs at system boundaries (CLI args, config files)
+
+**NewType Pattern:**
+```rust
+/// A validated license header that is guaranteed non-empty.
+#[repr(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LicenseHeader(String);
+
+impl LicenseHeader {
+    /// Creates a new LicenseHeader, validating that it's not empty.
+    ///
+    /// # Errors
+    /// Returns `ValidationError::EmptyHeader` if the input is empty after trimming.
+    pub fn new(s: impl Into<String>) -> Result<Self, ValidationError> {
+        let s = s.into();
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError::EmptyHeader);
+        }
+        Ok(Self(trimmed.to_owned()))
+    }
+
+    /// Returns the header as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns the header as a byte slice for efficient comparison.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+```
+
+**Domain Types to Define:**
+- `LicenseHeader` - validated non-empty license text
+- `FilePath` - validated path wrapper
+- `FileExtension` - lowercase, no leading dot
+- `CommentStyle` - prefix and optional suffix for comments
+- `MaxHeaderBytes` - validated minimum of 256 bytes
+- `SimilarityScore` - clamped to 0-100 range
+
+### Tenet 2: Performance (Zero-Cost Abstractions)
+
+**Principle:** High performance is the absence of unnecessary work.
+
+**Requirements:**
+- All NewTypes MUST use `#[repr(transparent)]` for zero runtime overhead
+- Prefer `&[u8]` (byte slices) over `String` for file content
+- Use `memchr` crate for fast byte searching
+- Stream files - never load entire large files into memory
+- Stop reading after `max_header_bytes` (default 8KB) for header checks
+- Use `rayon` for parallel file processing
+- Use `ignore` crate's parallel walker for file discovery
+
+**Example - Efficient byte operations:**
+```rust
+use memchr::memchr;
+
+/// Detects if content is binary by checking for NULL bytes.
+/// Only checks the first chunk of the file for performance.
+pub fn is_binary(content: &[u8]) -> bool {
+    memchr(0, content).is_some()
+}
+
+/// Finds the position after a shebang line, if present.
+pub fn skip_shebang(content: &[u8]) -> usize {
+    if content.starts_with(b"#!") {
+        memchr(b'\n', content).map(|pos| pos + 1).unwrap_or(0)
+    } else {
+        0
+    }
+}
+```
+
+### Tenet 3: Scalability (Parallel by Default)
+
+**Principle:** Design for horizontal scaling from day one.
+
+**Requirements:**
+- Use `rayon` for parallel file processing
+- Use `ignore::WalkBuilder` for parallel directory walking
+- Design stateless operations that can run on any thread
+- No global mutable state
+
+**Example - Parallel scanning:**
+```rust
+use rayon::prelude::*;
+use ignore::WalkBuilder;
+
+pub fn scan_directory(root: &Path, config: &Config) -> Vec<ScanResult> {
+    WalkBuilder::new(root)
+        .hidden(true)
+        .git_ignore(true)
+        .threads(config.parallel_jobs.unwrap_or(0)) // 0 = num_cpus
+        .build()
+        .par_bridge() // Convert to parallel iterator
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+        .map(|entry| check_file(entry.path(), config))
+        .collect()
+}
+```
+
+### Tenet 4: Readability (Bus Factor = 1)
+
+**Principle:** Code must be understandable after 6-12 months.
+
+**Requirements:**
+- Every public type and function MUST have `///` doc comments
+- Explain WHY, not just WHAT
+- No magic numbers - use named constants
+- Explicit > Clever - avoid overly complex generics or macros
+- No raw primitives in public function signatures
+
+**Example - Good documentation:**
+```rust
+/// Maximum bytes to read from file start for header detection.
+///
+/// This limit exists to prevent reading entire large files (like logs)
+/// when we only need to check the first few lines for a license header.
+/// The default of 8KB is sufficient for any reasonable license header.
+pub const DEFAULT_MAX_HEADER_BYTES: usize = 8192;
+
+/// Checks if a file contains the expected license header.
+///
+/// # Algorithm
+/// 1. Reads only the first `max_bytes` of the file
+/// 2. Detects and skips shebang (`#!`) if present
+/// 3. Detects and skips XML declaration (`<?xml`) if present
+/// 4. Compares remaining content against expected header
+///
+/// # Performance
+/// - Uses memory-mapped I/O for files larger than 64KB
+/// - Binary files are detected and skipped immediately
+///
+/// # Errors
+/// Returns `CheckerError::Io` if the file cannot be read.
+#[tracing::instrument(skip(content, expected), fields(content_len = content.len()))]
+pub fn check_header(
+    path: &FilePath,
+    content: &[u8],
+    expected: &LicenseHeader,
+    style: &CommentStyle,
+) -> Result<FileStatus, CheckerError> {
+    // Implementation
+}
+```
+
+### Tenet 5: Observability (The Eyes)
+
+**Principle:** You cannot debug what you cannot see.
+
+**Requirements:**
+- Use `tracing` crate for ALL logging (NEVER `println!` or `eprintln!`)
+- Add `#[tracing::instrument]` to all public functions
+- Use `skip(self)` for methods to avoid verbose output
+- Include relevant context in spans (file paths, counts, durations)
+- Use appropriate log levels:
+  - `error!` - Operation failed, requires attention
+  - `warn!` - Unexpected but recoverable (e.g., skipped file)
+  - `info!` - High-level progress (e.g., "Scanning 1000 files")
+  - `debug!` - Detailed operation info (e.g., file-by-file status)
+  - `trace!` - Very verbose (e.g., byte-level operations)
+
+**Example - Proper instrumentation:**
+```rust
+use tracing::{debug, info, instrument, warn};
+
+#[instrument(skip(self, config), fields(root = %root.display()))]
+pub fn scan(&self, root: &Path, config: &Config) -> ScanSummary {
+    info!("Starting scan");
+    
+    let results: Vec<_> = self.walk_files(root)
+        .inspect(|entry| debug!(path = %entry.path().display(), "Checking file"))
+        .filter_map(|entry| {
+            match self.check_file(&entry) {
+                Ok(result) => Some(result),
+                Err(e) => {
+                    warn!(error = %e, path = %entry.path().display(), "Failed to check file");
+                    None
+                }
+            }
+        })
+        .collect();
+    
+    let summary = ScanSummary::from_results(results);
+    info!(
+        total = summary.total,
+        passed = summary.passed,
+        failed = summary.failed,
+        "Scan complete"
+    );
+    
+    summary
+}
+```
+
+### Tenet 6: Reliability (Resilience)
+
+**Principle:** Resilience over mean time between failures.
+
+**CRITICAL REQUIREMENTS - STRICTLY ENFORCED:**
+- ZERO `.unwrap()` in production code
+- ZERO `.expect()` in production code
+- ZERO `panic!()` macros
+- ZERO array indexing `arr[i]` - use `.get()` instead
+- ALL errors must be typed with `thiserror`
+- Use `?` operator for error propagation
+
+**Error Handling Pattern:**
+```rust
+use thiserror::Error;
+
+/// Errors that can occur during file scanning.
+#[derive(Debug, Error)]
+pub enum ScannerError {
+    /// Failed to walk directory tree.
+    #[error("Failed to walk directory {path}: {source}")]
+    WalkError {
+        path: PathBuf,
+        #[source]
+        source: ignore::Error,
+    },
+
+    /// Failed to read file.
+    #[error("Failed to read {path}: {source}")]
+    IoError {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// File appears to be binary.
+    #[error("Binary file detected: {0}")]
+    BinaryFile(PathBuf),
+}
+
+// CORRECT - Use ? operator
+pub fn read_header(path: &Path, max_bytes: usize) -> Result<Vec<u8>, ScannerError> {
+    let file = File::open(path).map_err(|source| ScannerError::IoError {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    
+    let mut buffer = vec![0u8; max_bytes];
+    let bytes_read = file.take(max_bytes as u64).read(&mut buffer)
+        .map_err(|source| ScannerError::IoError {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    
+    buffer.truncate(bytes_read);
+    Ok(buffer)
+}
+
+// WRONG - Never do this
+pub fn bad_read(path: &Path) -> Vec<u8> {
+    std::fs::read(path).unwrap()  // ❌ FORBIDDEN
+}
+```
+
+**Safe Indexing:**
+```rust
+// WRONG - Can panic
+let first = items[0];  // ❌ FORBIDDEN
+
+// CORRECT - Returns Option
+let first = items.get(0);  // ✅ Returns Option<&T>
+let first = items.first(); // ✅ Also returns Option<&T>
+
+// CORRECT - With error handling
+let first = items.first().ok_or(MyError::EmptyCollection)?;
+```
+
+### Tenet 7: Simplicity (Maintainability)
+
+**Principle:** Complexity kills solo projects.
+
+**Requirements:**
+- Prefer stable, well-maintained crates
+- Single binary with library architecture
+- Let clippy and rustfmt decide style disputes
+- Avoid premature optimization
+
+**Approved Crates:**
+- `ignore` - File walking with .gitignore support (from ripgrep)
+- `rayon` - Parallel processing
+- `clap` - CLI argument parsing
+- `serde` + `toml` - Configuration
+- `thiserror` - Library error types
+- `anyhow` - CLI error handling (binary only)
+- `tracing` + `tracing-subscriber` - Observability
+- `memchr` - Fast byte searching
+
+## Architecture Constraints
+
+### Core Library (`src/lib.rs` and submodules)
+
+**Allowed Dependencies:**
+- `serde` (serialization)
+- `thiserror` (typed errors)
+- `tracing` (observability)
+- `rayon` (parallelism)
+- `ignore` (file walking)
+- `memchr` (byte searching)
+- `toml` (config parsing)
+
+**FORBIDDEN Dependencies:**
+- `clap` (CLI only)
+- `anyhow` (CLI only)
+- `tracing-subscriber` (CLI only)
+
+**Purpose:**
+- Pure business logic for scanning, checking, fixing
+- Domain types and validation
+- Trait definitions (ports)
+- Testable in isolation without I/O mocking
+
+### CLI Binary (`src/bin/flc.rs`)
+
+**Allowed Dependencies:**
+- Everything from core library
+- `clap` (argument parsing)
+- `anyhow` (user-friendly errors)
+- `tracing-subscriber` (log formatting)
+
+**Purpose:**
+- Parse CLI arguments
+- Initialize tracing
+- Load configuration
+- Call library functions
+- Format output for users
+- Set exit codes
+
+## File Handling Rules
+
+### Binary File Detection
+
+```rust
+/// Check if content appears to be binary.
+/// Binary files contain NULL bytes in the first chunk.
+pub fn is_binary(content: &[u8]) -> bool {
+    memchr::memchr(0, content).is_some()
+}
+```
+
+### Shebang Preservation
+
+When fixing files, headers must be inserted AFTER shebangs:
+
+```rust
+/// Find insertion point for license header.
+/// Returns byte offset where header should be inserted.
+pub fn find_insertion_point(content: &[u8]) -> usize {
+    // Check for shebang
+    if content.starts_with(b"#!") {
+        if let Some(newline) = memchr::memchr(b'\n', content) {
+            return newline + 1;
+        }
+    }
+    
+    // Check for XML declaration
+    if content.starts_with(b"<?xml") {
+        if let Some(end) = content.windows(2).position(|w| w == b"?>") {
+            let pos = end + 2;
+            // Skip trailing newline if present
+            if content.get(pos) == Some(&b'\n') {
+                return pos + 1;
+            }
+            return pos;
+        }
+    }
+    
+    0 // Insert at beginning
+}
+```
+
+### Large File Handling
+
+```rust
+/// Read only the first N bytes of a file for header checking.
+/// This prevents loading entire large files into memory.
+pub fn read_header_bytes(path: &Path, max_bytes: MaxHeaderBytes) -> Result<Vec<u8>, IoError> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = vec![0u8; max_bytes.value()];
+    let bytes_read = reader.read(&mut buffer)?;
+    buffer.truncate(bytes_read);
+    Ok(buffer)
+}
+```
+
+### Atomic File Writes
+
+When fixing files, use atomic writes to prevent corruption:
+
+```rust
+/// Write content to file atomically.
+/// Writes to temp file first, then renames.
+pub fn write_atomic(path: &Path, content: &[u8]) -> Result<(), FixerError> {
+    let parent = path.parent().ok_or_else(|| FixerError::InvalidPath(path.to_path_buf()))?;
+    
+    let temp_name = format!(".{}.tmp", path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file"));
+    let temp_path = parent.join(temp_name);
+    
+    // Write to temp file
+    let mut file = File::create(&temp_path)?;
+    file.write_all(content)?;
+    file.sync_all()?;
+    drop(file);
+    
+    // Atomic rename
+    std::fs::rename(&temp_path, path)?;
+    
+    Ok(())
+}
+```
+
+## Code Generation Guidelines
+
+### Before Writing Code
+
+1. Identify the domain types needed
+2. Define error types with `thiserror`
+3. Write type signatures first
+4. Add `#[tracing::instrument]` to public functions
+5. Write doc comments explaining WHY
+
+### During Implementation
+
+1. Use `?` for all error propagation
+2. Use `.get()` instead of indexing
+3. Use `memchr` for byte searching
+4. Add `debug!` logs for key operations
+5. Keep functions focused and small
+
+### After Implementation
+
+1. Run `cargo fmt`
+2. Run `cargo clippy -- -D warnings`
+3. Run `cargo test`
+4. Verify no `unwrap`/`expect`/`panic` in code
+5. Verify all public items have doc comments
+
+## Testing Requirements
+
+### Unit Tests
+
+- Every public function must have at least one test
+- Test both success and error cases
+- Use `proptest` for property-based testing of invariants
+
+### Integration Tests
+
+- Test full scan/fix workflows with `tempfile`
+- Test edge cases: shebangs, XML, binary files
+- Test idempotency: fix twice = same result
+
+### Example Test Structure
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[test]
+    fn license_header_rejects_empty() {
+        assert!(LicenseHeader::new("").is_err());
+        assert!(LicenseHeader::new("   ").is_err());
+        assert!(LicenseHeader::new("\n\t").is_err());
+    }
+
+    #[test]
+    fn license_header_trims_whitespace() {
+        let header = LicenseHeader::new("  MIT License  ").unwrap();
+        assert_eq!(header.as_str(), "MIT License");
+    }
+
+    proptest! {
+        #[test]
+        fn license_header_never_panics(s in ".*") {
+            // Should never panic, only return Ok or Err
+            let _ = LicenseHeader::new(s);
+        }
+    }
+}
+```
+
+## Forbidden Patterns Summary
+
+| Pattern | Reason | Alternative |
+|---------|--------|-------------|
+| `.unwrap()` | Can panic | Use `?` or `ok_or()` |
+| `.expect()` | Can panic | Use `?` with context |
+| `panic!()` | Crashes program | Return `Result` |
+| `arr[i]` | Can panic | Use `.get(i)` |
+| `println!()` | Not structured | Use `tracing::info!()` |
+| `eprintln!()` | Not structured | Use `tracing::error!()` |
+| `dbg!()` | Debug only | Use `tracing::debug!()` |
+| Raw `String` in API | No validation | Use NewTypes |
+| Raw `PathBuf` in API | No validation | Use `FilePath` NewType |
+
+## Quick Reference
+
+### Creating a NewType
+
+```rust
+#[repr(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MyType(Inner);
+
+impl MyType {
+    pub fn new(value: impl Into<Inner>) -> Result<Self, ValidationError> {
+        let value = value.into();
+        // Validate
+        Ok(Self(value))
+    }
+    
+    pub fn value(&self) -> &Inner {
+        &self.0
+    }
+}
+```
+
+### Adding Tracing
+
+```rust
+use tracing::{debug, error, info, instrument, warn};
+
+#[instrument(skip(self), fields(path = %path.display()))]
+pub fn process(&self, path: &Path) -> Result<Output, Error> {
+    debug!("Starting processing");
+    
+    let result = self.inner_process(path)?;
+    
+    info!(output = ?result, "Processing complete");
+    Ok(result)
+}
+```
+
+### Error Handling
+
+```rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum MyError {
+    #[error("Invalid input: {message}")]
+    InvalidInput { message: String },
+    
+    #[error("IO error at {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+```
+
+---
+
+Remember: The Rust compiler and clippy are your partners. Let them guide you.
+Every line of code must have a reason; if not, delete it.
+

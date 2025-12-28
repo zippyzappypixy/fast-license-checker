@@ -1,0 +1,96 @@
+[package]
+name = "fast-license-checker"
+version = "0.1.0"
+edition = "2021"
+authors = ["Preetham"]
+description = "Blazing-fast license header verification for your codebase"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zippyzappypixy/fast-license-checker.git"
+keywords = ["license", "header", "checker", "cli", "compliance"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[[bin]]
+name = "flc"
+path = "src/bin/flc.rs"
+
+[lib]
+name = "fast_license_checker"
+path = "src/lib.rs"
+
+[[bench]]
+name = "scan_performance"
+harness = false
+
+[dependencies]
+# File walking (from ripgrep, respects .gitignore)
+ignore = "0.4"
+
+# Parallel processing
+rayon = "1.10"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Fast byte searching
+memchr = "2"
+
+# CPU core detection
+num_cpus = "1.16"
+
+[dev-dependencies]
+# Test fixtures with temporary directories
+tempfile = "3"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Property-based testing
+proptest = "1"
+
+# Snapshot testing
+insta = { version = "1", features = ["json"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.bench]
+lto = true
+codegen-units = 1
+
+# Workspace-wide lints
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+# Tenet 6: Reliability - Ban crashes
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+
+# Tenet 2: Correctness - Prevent silent bugs  
+arithmetic_side_effects = "warn"
+
+# Tenet 7: Simplicity - Clean code
+wildcard_imports = "deny"
+enum_glob_use = "deny"
+
