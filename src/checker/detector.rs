@@ -11,7 +11,10 @@ pub enum HeaderMatch {
     /// Header found with exact match
     Exact,
     /// Header found with fuzzy match (similarity percentage)
-    Fuzzy { similarity: u8 },
+    Fuzzy {
+        /// Similarity score (0-100) indicating how closely the detected header matches the expected one
+        similarity: u8,
+    },
     /// No header found
     None,
 }
@@ -123,10 +126,7 @@ pub fn calculate_byte_similarity(a: &[u8], b: &[u8]) -> u8 {
     }
 
     // Find length of common prefix
-    let prefix_len = a.iter()
-        .zip(b.iter())
-        .take_while(|(x, y)| x == y)
-        .count();
+    let prefix_len = a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count();
 
     if prefix_len == 0 {
         return 0;
@@ -184,17 +184,11 @@ mod tests {
     }
 
     fn create_line_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "//".to_string(),
-            suffix: None,
-        }
+        CommentStyle { prefix: "//".to_string(), suffix: None }
     }
 
     fn create_block_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "/*".to_string(),
-            suffix: Some("*/".to_string()),
-        }
+        CommentStyle { prefix: "/*".to_string(), suffix: Some("*/".to_string()) }
     }
 
     #[test]
@@ -203,7 +197,6 @@ mod tests {
         let style = create_line_style();
 
         let formatted = format_header_for_search(&header, &style);
-        println!("Formatted: {:?}", formatted);
         let expected = "// MIT License\n\n// Copyright 2024 Test\n";
 
         assert_eq!(formatted, expected);

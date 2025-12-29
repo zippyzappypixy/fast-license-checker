@@ -1,4 +1,5 @@
 use fast_license_checker::types::ScanSummary;
+use std::io::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
 pub enum OutputFormat {
@@ -10,6 +11,19 @@ pub enum OutputFormat {
     Github,
 }
 
+/// Helper function to write to stdout, ignoring errors (e.g., broken pipe)
+/// This is acceptable for CLI output where broken pipes are common
+#[inline]
+fn write_stdout(writer: &mut impl Write, s: &str) {
+    let _ = writer.write_all(s.as_bytes());
+}
+
+/// Helper function to write formatted output to stdout
+#[inline]
+fn write_fmt_stdout(writer: &mut impl Write, args: std::fmt::Arguments) {
+    let _ = writer.write_fmt(args);
+}
+
 pub fn print_summary(summary: &ScanSummary, format: OutputFormat, color: bool) {
     match format {
         OutputFormat::Text => print_text(summary, color),
@@ -19,24 +33,22 @@ pub fn print_summary(summary: &ScanSummary, format: OutputFormat, color: bool) {
 }
 
 fn print_text(summary: &ScanSummary, color: bool) {
-    use std::io::Write;
-
-    let mut stdout = std::io::stdout();
+    let mut stdout = std::io::stdout().lock();
 
     if summary.total == 0 {
-        writeln!(stdout, "No files found to check").unwrap();
+        write_fmt_stdout(&mut stdout, format_args!("No files found to check\n"));
         return;
     }
 
     // Summary header
     if color {
-        write!(stdout, "\x1b[1;36m").unwrap(); // Cyan bold
+        write_stdout(&mut stdout, "\x1b[1;36m"); // Cyan bold
     }
-    write!(stdout, "License Header Check Results").unwrap();
+    write_stdout(&mut stdout, "License Header Check Results");
     if color {
-        write!(stdout, "\x1b[0m").unwrap();
+        write_stdout(&mut stdout, "\x1b[0m");
     }
-    writeln!(stdout).unwrap();
+    write_stdout(&mut stdout, "\n");
 
     // Progress bar style summary
     let passed_pct = if summary.total > 0 {
@@ -46,41 +58,41 @@ fn print_text(summary: &ScanSummary, color: bool) {
     };
 
     if color {
-        write!(stdout, "\x1b[32m").unwrap(); // Green
+        write_stdout(&mut stdout, "\x1b[32m"); // Green
     }
-    write!(stdout, "✓ Passed: {}", summary.passed).unwrap();
+    write_fmt_stdout(&mut stdout, format_args!("✓ Passed: {}", summary.passed));
     if color {
-        write!(stdout, "\x1b[0m").unwrap();
+        write_stdout(&mut stdout, "\x1b[0m");
     }
 
     if summary.failed > 0 {
         if color {
-            write!(stdout, "  \x1b[31m").unwrap(); // Red
+            write_stdout(&mut stdout, "  \x1b[31m"); // Red
         }
-        write!(stdout, "✗ Failed: {}", summary.failed).unwrap();
+        write_fmt_stdout(&mut stdout, format_args!("✗ Failed: {}", summary.failed));
         if color {
-            write!(stdout, "\x1b[0m").unwrap();
+            write_stdout(&mut stdout, "\x1b[0m");
         }
     }
 
     if summary.skipped > 0 {
         if color {
-            write!(stdout, "  \x1b[33m").unwrap(); // Yellow
+            write_stdout(&mut stdout, "  \x1b[33m"); // Yellow
         }
-        write!(stdout, "⚠ Skipped: {}", summary.skipped).unwrap();
+        write_fmt_stdout(&mut stdout, format_args!("⚠ Skipped: {}", summary.skipped));
         if color {
-            write!(stdout, "\x1b[0m").unwrap();
+            write_stdout(&mut stdout, "\x1b[0m");
         }
     }
 
     if color {
-        write!(stdout, "  \x1b[36m").unwrap(); // Cyan
+        write_stdout(&mut stdout, "  \x1b[36m"); // Cyan
     }
-    write!(stdout, "Total: {}", summary.total).unwrap();
+    write_fmt_stdout(&mut stdout, format_args!("Total: {}", summary.total));
     if color {
-        write!(stdout, "\x1b[0m").unwrap();
+        write_stdout(&mut stdout, "\x1b[0m");
     }
-    writeln!(stdout).unwrap();
+    write_stdout(&mut stdout, "\n");
 
     // Show progress bar
     if summary.total > 0 {
@@ -89,70 +101,74 @@ fn print_text(summary: &ScanSummary, color: bool) {
         let empty = bar_width - filled;
 
         if color {
-            write!(stdout, "\x1b[32m").unwrap(); // Green
+            write_stdout(&mut stdout, "\x1b[32m"); // Green
         }
-        write!(stdout, "[").unwrap();
+        write_stdout(&mut stdout, "[");
         for _ in 0..filled {
-            write!(stdout, "█").unwrap();
+            write_stdout(&mut stdout, "█");
         }
         if color {
-            write!(stdout, "\x1b[31m").unwrap(); // Red
+            write_stdout(&mut stdout, "\x1b[31m"); // Red
         }
         for _ in 0..empty {
-            write!(stdout, "░").unwrap();
+            write_stdout(&mut stdout, "░");
         }
         if color {
-            write!(stdout, "\x1b[0m").unwrap();
+            write_stdout(&mut stdout, "\x1b[0m");
         }
-        writeln!(stdout, "] {}%", passed_pct).unwrap();
+        write_fmt_stdout(&mut stdout, format_args!("] {}%\n", passed_pct));
     }
 
     // Show details if there are failures or if verbose
     if summary.failed > 0 || summary.skipped > 0 {
-        writeln!(stdout).unwrap();
+        write_stdout(&mut stdout, "\n");
         if color {
-            write!(stdout, "\x1b[1m").unwrap(); // Bold
+            write_stdout(&mut stdout, "\x1b[1m"); // Bold
         }
-        writeln!(stdout, "Details:").unwrap();
+        write_stdout(&mut stdout, "Details:\n");
         if color {
-            write!(stdout, "\x1b[0m").unwrap();
+            write_stdout(&mut stdout, "\x1b[0m");
         }
 
         // Show failed files
         if summary.failed > 0 {
             if color {
-                write!(stdout, "\x1b[31m").unwrap(); // Red
+                write_stdout(&mut stdout, "\x1b[31m"); // Red
             }
-            writeln!(stdout, "Failed files:").unwrap();
+            write_stdout(&mut stdout, "Failed files:\n");
             if color {
-                write!(stdout, "\x1b[0m").unwrap();
+                write_stdout(&mut stdout, "\x1b[0m");
             }
 
             // Note: In a real implementation, we'd iterate through results
             // For now, just show the count
-            writeln!(stdout, "  {} files missing license headers", summary.failed).unwrap();
+            write_fmt_stdout(
+                &mut stdout,
+                format_args!("  {} files missing license headers\n", summary.failed),
+            );
         }
 
         // Show skipped files
         if summary.skipped > 0 {
             if color {
-                write!(stdout, "\x1b[33m").unwrap(); // Yellow
+                write_stdout(&mut stdout, "\x1b[33m"); // Yellow
             }
-            writeln!(stdout, "Skipped files:").unwrap();
+            write_stdout(&mut stdout, "Skipped files:\n");
             if color {
-                write!(stdout, "\x1b[0m").unwrap();
+                write_stdout(&mut stdout, "\x1b[0m");
             }
 
             // Note: In a real implementation, we'd show reasons
-            writeln!(stdout, "  {} files skipped (binary, unsupported, etc.)", summary.skipped).unwrap();
+            write_fmt_stdout(
+                &mut stdout,
+                format_args!("  {} files skipped (binary, unsupported, etc.)\n", summary.skipped),
+            );
         }
     }
 }
 
 fn print_json(summary: &ScanSummary) {
-    use std::io::Write;
-
-    let mut stdout = std::io::stdout();
+    let mut stdout = std::io::stdout().lock();
 
     // Create JSON structure
     let json = serde_json::json!({
@@ -165,22 +181,33 @@ fn print_json(summary: &ScanSummary) {
         "results": []  // In a full implementation, this would contain detailed results
     });
 
-    writeln!(stdout, "{}", serde_json::to_string_pretty(&json).unwrap()).unwrap();
+    // JSON serialization should never fail for our simple structure
+    if let Ok(json_str) = serde_json::to_string_pretty(&json) {
+        write_fmt_stdout(&mut stdout, format_args!("{}\n", json_str));
+    }
 }
 
 fn print_github(summary: &ScanSummary) {
-    use std::io::Write;
-
-    let mut stdout = std::io::stdout();
+    let mut stdout = std::io::stdout().lock();
 
     // GitHub Actions annotations format
     if summary.failed > 0 {
-        writeln!(stdout, "::error title=License Check Failed::Found {} files missing license headers out of {} total files",
-                summary.failed, summary.total).unwrap();
+        write_fmt_stdout(&mut stdout, format_args!(
+            "::error title=License Check Failed::Found {} files missing license headers out of {} total files\n",
+            summary.failed, summary.total
+        ));
     } else if summary.total == 0 {
-        writeln!(stdout, "::warning title=No Files Found::No files found to check for license headers").unwrap();
+        write_stdout(
+            &mut stdout,
+            "::warning title=No Files Found::No files found to check for license headers\n",
+        );
     } else {
-        writeln!(stdout, "::notice title=License Check Passed::All {} files have valid license headers",
-                summary.total).unwrap();
+        write_fmt_stdout(
+            &mut stdout,
+            format_args!(
+                "::notice title=License Check Passed::All {} files have valid license headers\n",
+                summary.total
+            ),
+        );
     }
 }

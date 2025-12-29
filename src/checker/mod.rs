@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Config;
-use crate::error::{Result, CheckerError};
+use crate::error::{CheckerError, Result};
 use crate::types::{CommentStyle, FileExtension, FileStatus, LicenseHeader, MaxHeaderBytes};
 
 /// Main header checker that coordinates all header detection logic
@@ -74,9 +74,7 @@ impl HeaderChecker {
         let content = self.read_file_content(path)?;
 
         // Get file extension
-        let extension = path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|s| s.to_lowercase());
+        let extension = path.extension().and_then(|ext| ext.to_str()).map(|s| s.to_lowercase());
 
         // Check the content
         Ok(self.check_content(&content, extension.as_deref()))
@@ -94,10 +92,7 @@ impl HeaderChecker {
         }
 
         // Default to line comments (//) if no style found
-        CommentStyle {
-            prefix: "//".to_string(),
-            suffix: None,
-        }
+        CommentStyle { prefix: "//".to_string(), suffix: None }
     }
 
     /// Read file content up to the maximum header bytes
@@ -106,22 +101,15 @@ impl HeaderChecker {
         use std::fs::File;
         use std::io::Read;
 
-        let file = File::open(path).map_err(|e| {
-            CheckerError::Io {
-                path: path.to_path_buf(),
-                source: e,
-            }
-        })?;
+        let file = File::open(path)
+            .map_err(|e| CheckerError::Io { path: path.to_path_buf(), source: e })?;
 
         let mut buffer = Vec::new();
         let max_read = self.max_bytes.value();
 
         file.take(max_read as u64)
             .read_to_end(&mut buffer)
-            .map_err(|e| CheckerError::Io {
-                path: path.to_path_buf(),
-                source: e,
-            })?;
+            .map_err(|e| CheckerError::Io { path: path.to_path_buf(), source: e })?;
 
         // Truncate if we read more than expected
         if buffer.len() > max_read {
@@ -157,14 +145,11 @@ mod tests {
         let mut config = Config::default();
         config.license_header = "MIT License\n\nCopyright 2024 Test".to_string();
         config.similarity_threshold = 50; // Lower threshold for fuzzy matching
-        // Add a comment style for Rust files
+                                          // Add a comment style for Rust files
         use crate::config::CommentStyleConfig;
         config.comment_styles.insert(
             "rs".to_string(),
-            CommentStyleConfig {
-                prefix: "//".to_string(),
-                suffix: None,
-            },
+            CommentStyleConfig { prefix: "//".to_string(), suffix: None },
         );
         config
     }
@@ -224,7 +209,8 @@ mod tests {
         let config = create_test_config();
         let checker = HeaderChecker::new(&config).unwrap();
 
-        let content = b"#!/usr/bin/env python3\n# MIT License\n\n# Copyright 2024 Test\nprint('hello')";
+        let content =
+            b"#!/usr/bin/env python3\n# MIT License\n\n# Copyright 2024 Test\nprint('hello')";
         let status = checker.check_content(content, Some("py"));
 
         assert!(matches!(status, FileStatus::HasHeader));

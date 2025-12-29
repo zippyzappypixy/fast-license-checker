@@ -8,51 +8,78 @@ use std::path::PathBuf;
 /// Top-level error type for the license checker library
 #[derive(Debug, thiserror::Error)]
 pub enum LicenseCheckerError {
+    /// Configuration-related errors (file loading, parsing, validation)
     #[error("Configuration error: {0}")]
     Config(#[from] ConfigError),
 
+    /// File scanning errors (walking directories, reading files)
     #[error("Scanner error: {0}")]
     Scanner(#[from] ScannerError),
 
+    /// Header checking errors (detection, validation)
     #[error("Checker error: {0}")]
     Checker(#[from] CheckerError),
 
+    /// Header fixing errors (insertion, file writing)
     #[error("Fixer error: {0}")]
     Fixer(#[from] FixerError),
 
+    /// Validation errors for domain types (NewTypes)
     #[error("Validation error: {0}")]
     Validation(#[from] ValidationError),
+
+    /// Generic string error for cases that don't fit other categories
+    #[error("Generic error: {0}")]
+    Generic(String),
 }
 
 /// Configuration-related errors
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// Configuration file was not found at the specified path
     #[error("Config file not found: {0}")]
     NotFound(PathBuf),
 
+    /// Failed to parse configuration file (TOML/JSON syntax error)
     #[error("Failed to parse config: {0}")]
     Parse(#[from] toml::de::Error),
 
+    /// Required configuration field is missing
     #[error("Missing required field: {field}")]
-    MissingField { field: &'static str },
+    MissingField {
+        /// Name of the missing field
+        field: &'static str,
+    },
 
+    /// Configuration field has an invalid value
     #[error("Invalid value for {field}: {message}")]
-    InvalidValue { field: &'static str, message: String },
+    InvalidValue {
+        /// Name of the field with invalid value
+        field: &'static str,
+        /// Description of why the value is invalid
+        message: String,
+    },
 }
 
 /// File scanning errors
 #[derive(Debug, thiserror::Error)]
 pub enum ScannerError {
+    /// Failed to walk directory tree (permissions, I/O errors)
     #[error("Failed to walk directory {path}: {source}")]
     WalkError {
+        /// Path where the walk error occurred
         path: PathBuf,
+        /// Underlying error from the ignore crate
         #[source]
         source: ignore::Error,
     },
 
+    /// I/O error while reading a file
     #[error("IO error reading {path}: {source}")]
     Io {
+        /// Path to the file that couldn't be read
         path: PathBuf,
+        /// Underlying I/O error
         #[source]
         source: std::io::Error,
     },
@@ -61,16 +88,21 @@ pub enum ScannerError {
 /// Header checking errors
 #[derive(Debug, thiserror::Error)]
 pub enum CheckerError {
+    /// I/O error while reading file for header check
     #[error("IO error reading {path}: {source}")]
     Io {
+        /// Path to the file that couldn't be read
         path: PathBuf,
+        /// Underlying I/O error
         #[source]
         source: std::io::Error,
     },
 
+    /// File contains binary data (NULL bytes detected)
     #[error("File appears to be binary: {0}")]
     BinaryFile(PathBuf),
 
+    /// File encoding is not supported (non-UTF-8)
     #[error("Unsupported encoding in file: {0}")]
     UnsupportedEncoding(PathBuf),
 }
@@ -78,50 +110,75 @@ pub enum CheckerError {
 /// Header fixing errors
 #[derive(Debug, thiserror::Error)]
 pub enum FixerError {
+    /// Attempted to fix a binary file (not supported)
     #[error("Cannot fix binary file: {0}")]
     BinaryFile(PathBuf),
 
+    /// Failed to write file during fix operation
     #[error("Failed to write {path}: {source}")]
     WriteError {
+        /// Path to the file that couldn't be written
         path: PathBuf,
+        /// Underlying I/O error
         #[source]
         source: std::io::Error,
     },
 
+    /// Header already exists - prevents duplicate insertion
     #[error("Header already exists in {0} - refusing to duplicate")]
     IdempotencyViolation(PathBuf),
 
+    /// Detected malformed header that requires manual review
     #[error(
         "Malformed header detected in {path} (similarity: {similarity}%) - manual review required"
     )]
-    MalformedHeader { path: PathBuf, similarity: u8 },
+    MalformedHeader {
+        /// Path to the file with malformed header
+        path: PathBuf,
+        /// Similarity score (0-100) of the malformed header
+        similarity: u8,
+    },
 
+    /// Failed to read file for fixing
     #[error("Failed to read {path}: {source}")]
     ReadError {
+        /// Path to the file that couldn't be read
         path: PathBuf,
+        /// Underlying I/O error
         #[source]
         source: std::io::Error,
     },
 
+    /// File extension has no configured comment style
     #[error("Unsupported file extension '{extension}' for file: {path}")]
-    UnsupportedExtension { extension: String, path: PathBuf },
+    UnsupportedExtension {
+        /// The unsupported extension
+        extension: String,
+        /// Path to the file with unsupported extension
+        path: PathBuf,
+    },
 }
 
 /// Validation errors for NewTypes
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
+    /// License header text is empty or whitespace-only
     #[error("License header cannot be empty")]
     EmptyHeader,
 
+    /// File extension string is empty
     #[error("File extension cannot be empty")]
     EmptyExtension,
 
+    /// File extension contains invalid characters (not alphanumeric, underscore, +, or #)
     #[error("File extension contains invalid characters")]
     InvalidExtension,
 
+    /// MaxHeaderBytes value is below the minimum (256 bytes)
     #[error("MaxHeaderBytes must be at least 256, got {0}")]
     HeaderBytesTooSmall(usize),
 
+    /// Similarity score is outside valid range (0-100)
     #[error("Similarity score must be 0-100, got {0}")]
     InvalidSimilarity(u8),
 }
@@ -223,20 +280,27 @@ mod tests {
     fn license_checker_error_from_validation_error() {
         let validation_error = ValidationError::EmptyHeader;
         let license_error: LicenseCheckerError = validation_error.into();
-        assert!(matches!(license_error, LicenseCheckerError::Validation(ValidationError::EmptyHeader)));
+        assert!(matches!(
+            license_error,
+            LicenseCheckerError::Validation(ValidationError::EmptyHeader)
+        ));
     }
 
     #[test]
     fn license_checker_error_from_string() {
         let error_str = "some validation error".to_string();
-        let license_error: LicenseCheckerError = error_str.into();
-        assert!(matches!(license_error, LicenseCheckerError::Validation(ValidationError::InvalidExtension)));
+        let license_error: LicenseCheckerError = error_str.clone().into();
+        // String errors convert to Generic variant, not Validation
+        assert!(matches!(
+            license_error,
+            LicenseCheckerError::Generic(ref s) if s == &error_str
+        ));
     }
 }
 
 impl From<String> for LicenseCheckerError {
-    fn from(_err: String) -> Self {
-        // Convert string errors to a generic validation error
-        Self::Validation(ValidationError::InvalidExtension)
+    fn from(err: String) -> Self {
+        // Convert string errors to a generic error variant
+        Self::Generic(err)
     }
 }

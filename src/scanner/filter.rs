@@ -44,9 +44,7 @@ pub fn should_skip(content: &[u8], config: &Config) -> Option<SkipReason> {
 /// Check if a file extension has a configured comment style
 #[tracing::instrument]
 pub fn has_comment_style(config: &Config, extension: Option<&str>) -> bool {
-    extension
-        .and_then(|ext| config.comment_styles.get(ext))
-        .is_some()
+    extension.and_then(|ext| config.comment_styles.get(ext)).is_some()
 }
 
 /// Determine skip reason for files without comment styles
@@ -189,7 +187,10 @@ mod tests {
     #[test]
     fn skip_reason_for_extension_without_style() {
         let config = Config::default();
-        assert_eq!(skip_reason_for_extension(&config, Some("xyz")), Some(SkipReason::NoCommentStyle));
+        assert_eq!(
+            skip_reason_for_extension(&config, Some("xyz")),
+            Some(SkipReason::NoCommentStyle)
+        );
     }
 
     #[test]

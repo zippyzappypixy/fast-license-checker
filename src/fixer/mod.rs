@@ -6,17 +6,17 @@
 pub mod inserter;
 pub mod writer;
 
+use rayon::iter::ParallelIterator;
 use std::path::Path;
 use tracing::{debug, info};
-use rayon::iter::ParallelIterator;
 
 use crate::{
-    config::Config,
-    types::{FilePath, ScanSummary, ScanResult, FileStatus, SkipReason},
-    types::header_types::CommentStyle,
-    scanner::walker::{FileWalker, WalkEntry},
     checker::HeaderChecker,
-    error::{Result, FixerError},
+    config::Config,
+    error::{FixerError, Result},
+    scanner::walker::{FileWalker, WalkEntry},
+    types::header_types::CommentStyle,
+    types::{FilePath, FileStatus, ScanResult, ScanSummary, SkipReason},
 };
 
 /// Main interface for fixing license headers in files.
@@ -36,11 +36,7 @@ impl HeaderFixer {
             .with_parallelism(config.parallel_jobs.unwrap_or(1));
         let checker = HeaderChecker::new(&config)?;
 
-        Ok(Self {
-            walker,
-            checker,
-            config,
-        })
+        Ok(Self { walker, checker, config })
     }
 
     /// Fixes all files that are missing license headers.
@@ -65,18 +61,16 @@ impl HeaderFixer {
             let result = self.check_file(&entry)?;
 
             match result.status {
-                FileStatus::MissingHeader => {
-                    match self.fix_file(&result.path) {
-                        Ok(_) => {
-                            debug!(path = %result.path.as_path().display(), "Fixed file");
-                            fixed += 1;
-                        }
-                        Err(e) => {
-                            debug!(path = %result.path.as_path().display(), error = %e, "Failed to fix file");
-                            failed += 1;
-                        }
+                FileStatus::MissingHeader => match self.fix_file(&result.path) {
+                    Ok(_) => {
+                        debug!(path = %result.path.as_path().display(), "Fixed file");
+                        fixed += 1;
                     }
-                }
+                    Err(e) => {
+                        debug!(path = %result.path.as_path().display(), error = %e, "Failed to fix file");
+                        failed += 1;
+                    }
+                },
                 FileStatus::HasHeader => {
                     // Already has header, count as passed
                 }
@@ -92,11 +86,8 @@ impl HeaderFixer {
         let total = fixed + failed + skipped;
         let duration = start.elapsed();
         let summary = ScanSummary::new(
-            total,
-            fixed, // Fixed files now pass
-            failed,
-            skipped,
-            duration,
+            total, fixed, // Fixed files now pass
+            failed, skipped, duration,
         );
 
         info!(
@@ -121,7 +112,8 @@ impl HeaderFixer {
         // Read file content first
         let content = match std::fs::read(file_path.as_path()) {
             Ok(content) => content,
-            Err(e) => {
+            Err(_e) => {
+                // File read error - skip with appropriate reason
                 return Ok(ScanResult {
                     path: file_path.clone(),
                     status: FileStatus::Skipped { reason: SkipReason::UnsupportedEncoding },
@@ -147,7 +139,11 @@ impl HeaderFixer {
 
         // Check if we should process this file
         let extension = file_path.extension().map(|ext| ext.as_str().to_string());
-        if let Err(reason) = crate::scanner::filter::should_process_file(&content, extension.as_deref(), &self.config) {
+        if let Err(reason) = crate::scanner::filter::should_process_file(
+            &content,
+            extension.as_deref(),
+            &self.config,
+        ) {
             return Ok(ScanResult {
                 path: file_path.clone(),
                 status: FileStatus::Skipped { reason },
@@ -156,10 +152,7 @@ impl HeaderFixer {
 
         // Check header
         match self.checker.check_file(file_path.as_path()) {
-            Ok(status) => Ok(ScanResult {
-                path: file_path.clone(),
-                status,
-            }),
+            Ok(status) => Ok(ScanResult { path: file_path.clone(), status }),
             Err(_) => Ok(ScanResult {
                 path: file_path.clone(),
                 status: FileStatus::Skipped { reason: SkipReason::UnsupportedEncoding },
@@ -174,29 +167,26 @@ impl HeaderFixer {
         use crate::fixer::writer::write_atomic;
 
         // Read the file content
-        let content = std::fs::read(path.as_path())
-            .map_err(|source| FixerError::ReadError {
-                path: path.as_path().to_path_buf(),
-                source,
-            })?;
+        let content = std::fs::read(path.as_path()).map_err(|source| FixerError::ReadError {
+            path: path.as_path().to_path_buf(),
+            source,
+        })?;
 
         // Get comment style for this file
-        let extension = path.extension().map(|ext| ext.as_str().to_string()).unwrap_or_else(|| "".to_string());
-        let style_config = self.config.comment_styles.get(&extension)
-            .ok_or_else(|| FixerError::UnsupportedExtension {
+        let extension =
+            path.extension().map(|ext| ext.as_str().to_string()).unwrap_or_else(|| "".to_string());
+        let style_config = self.config.comment_styles.get(&extension).ok_or_else(|| {
+            FixerError::UnsupportedExtension {
                 extension: extension.to_string(),
                 path: path.as_path().to_path_buf(),
-            })?;
+            }
+        })?;
         let style = CommentStyle::new(style_config.prefix.clone(), style_config.suffix.clone());
 
         // Insert the header
         use crate::types::header_types::LicenseHeader;
         let license_header = LicenseHeader::new(self.config.license_header.clone())?;
-        let new_content = insert_header(
-            &content,
-            &license_header,
-            &style,
-        )?;
+        let new_content = insert_header(&content, &license_header, &style)?;
 
         // Write atomically
         write_atomic(path.as_path(), &new_content)?;

@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use rayon::iter::ParallelIterator;
 
+use crate::checker::HeaderChecker;
 use crate::config::Config;
 use crate::error::{Result, ScannerError};
 use crate::types::{FilePath, ScanResult, ScanSummary};
@@ -22,6 +23,7 @@ use self::walker::{FileWalker, WalkEntry};
 #[derive(Debug)]
 pub struct Scanner {
     walker: FileWalker,
+    checker: HeaderChecker,
     config: Config,
 }
 
@@ -53,9 +55,12 @@ impl Scanner {
 
         let walker = FileWalker::new(root_path)
             .with_ignores(config.ignore_patterns.clone())
-            .with_parallelism(config.parallel_jobs.unwrap_or(1));
+            .with_parallelism(config.parallel_jobs.unwrap_or_else(|| num_cpus::get()));
 
-        Ok(Self { walker, config })
+        // Create header checker for actual header detection
+        let checker = HeaderChecker::new(&config)?;
+
+        Ok(Self { walker, checker, config })
     }
 
     /// Scan all files and return results
@@ -88,11 +93,7 @@ impl Scanner {
             duration,
         );
 
-        tracing::info!(
-            "Scan completed: {} files in {:.2}s",
-            summary.total,
-            duration.as_secs_f64()
-        );
+        tracing::info!("Scan completed: {} files in {:.2}s", summary.total, duration.as_secs_f64());
 
         Ok(summary)
     }
@@ -131,16 +132,13 @@ impl Scanner {
         let extension = entry.extension();
         match should_process_file(&content, extension, &self.config) {
             Ok(_) => {
-                // File should be processed - check license header
-                let status = self.check_license_header(&content, extension);
+                // File should be processed - check license header using HeaderChecker
+                let status = self.checker.check_content(&content, extension);
                 ScanResult::new(file_path, status)
             }
             Err(reason) => {
                 // File should be skipped
-                ScanResult::new(
-                    file_path,
-                    crate::types::FileStatus::Skipped { reason },
-                )
+                ScanResult::new(file_path, crate::types::FileStatus::Skipped { reason })
             }
         }
     }
@@ -155,7 +153,9 @@ impl Scanner {
         let mut buffer = Vec::new();
 
         // Read up to max_header_bytes + some buffer for safety
-        let max_read = self.config.max_header_bytes + 1024;
+        // Use checked_add to prevent overflow (though unlikely in practice)
+        let max_read =
+            self.config.max_header_bytes.checked_add(1024).unwrap_or(self.config.max_header_bytes);
         file.take(max_read as u64).read_to_end(&mut buffer)?;
 
         // Truncate to the configured maximum
@@ -165,34 +165,6 @@ impl Scanner {
 
         Ok(buffer)
     }
-
-    /// Check if the file content contains a valid license header
-    #[tracing::instrument(skip(self, content))]
-    fn check_license_header(&self, content: &[u8], extension: Option<&str>) -> crate::types::FileStatus {
-        // For now, return a placeholder implementation
-        // This will be replaced when we implement the actual header checking logic
-        // in the checker module
-
-        // If no license header is configured, consider all files as missing header
-        if self.config.license_header.is_empty() {
-            return crate::types::FileStatus::MissingHeader;
-        }
-
-        // Basic check: if content is empty or very small, consider it missing
-        if content.len() < 10 {
-            return crate::types::FileStatus::MissingHeader;
-        }
-
-        // Check if content starts with license header text
-        let header_bytes = self.config.license_header.as_bytes();
-        if content.starts_with(header_bytes) {
-            return crate::types::FileStatus::HasHeader;
-        }
-
-        // For now, assume missing header if we can't find an exact match
-        // TODO: Implement fuzzy matching and proper header checking
-        crate::types::FileStatus::MissingHeader
-    }
 }
 
 #[cfg(test)]
@@ -201,10 +173,14 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    // Tests are allowed to use unwrap() for test setup
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::arithmetic_side_effects)]
     #[test]
     fn scanner_new_valid_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
+        let mut config = Config::default();
+        // HeaderChecker requires a valid license header
+        config.license_header = "MIT License\nCopyright 2024".to_string();
 
         let scanner = Scanner::new(&temp_dir, config);
         assert!(scanner.is_ok());
@@ -229,7 +205,8 @@ mod tests {
     #[test]
     fn scanner_scan_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
+        let mut config = Config::default();
+        config.license_header = "MIT License\nCopyright 2024".to_string();
 
         let scanner = Scanner::new(&temp_dir, config).unwrap();
         let summary = scanner.scan().unwrap();
@@ -243,7 +220,8 @@ mod tests {
     #[test]
     fn scanner_scan_with_files() {
         let temp_dir = TempDir::new().unwrap();
-        let config = Config::default();
+        let mut config = Config::default();
+        config.license_header = "MIT License\nCopyright 2024".to_string();
 
         // Create a test file with content
         let test_file = temp_dir.path().join("test.rs");
@@ -256,20 +234,27 @@ mod tests {
         let summary = scanner.scan().unwrap();
 
         assert_eq!(summary.total, 1);
-        // With current placeholder implementation, this will be marked as missing header
+        // File without header should be marked as missing header
         assert_eq!(summary.failed, 1);
     }
 
     #[test]
     fn scanner_scan_with_license_header() {
         let mut config = Config::default();
-        config.license_header = "// MIT License\n//\n// Copyright 2024".to_string();
+        // Use raw header text (without comment markers) - HeaderChecker will format it
+        config.license_header = "MIT License\n\nCopyright 2024".to_string();
+        // Add comment style for .rs files
+        use crate::config::CommentStyleConfig;
+        config.comment_styles.insert(
+            "rs".to_string(),
+            CommentStyleConfig { prefix: "//".to_string(), suffix: None },
+        );
 
         let temp_dir = TempDir::new().unwrap();
 
-        // Create a test file with the license header
+        // Create a test file with the formatted license header
         let test_file = temp_dir.path().join("test.rs");
-        let content = format!("{}\n\nfn main() {{}}", config.license_header);
+        let content = "// MIT License\n\n// Copyright 2024\n\nfn main() {}\n";
         fs::write(&test_file, content).unwrap();
 
         let scanner = Scanner::new(&temp_dir, config).unwrap();
@@ -283,6 +268,7 @@ mod tests {
     fn scanner_skip_empty_files() {
         let mut config = Config::default();
         config.skip_empty_files = true;
+        config.license_header = "MIT License\nCopyright 2024".to_string();
 
         let temp_dir = TempDir::new().unwrap();
 
@@ -299,7 +285,8 @@ mod tests {
 
     #[test]
     fn scanner_skip_binary_files() {
-        let config = Config::default();
+        let mut config = Config::default();
+        config.license_header = "MIT License\nCopyright 2024".to_string();
         let temp_dir = TempDir::new().unwrap();
 
         // Create a binary file (with null bytes)
@@ -315,7 +302,8 @@ mod tests {
 
     #[test]
     fn scanner_skip_unknown_extensions() {
-        let config = Config::default();
+        let mut config = Config::default();
+        config.license_header = "MIT License\nCopyright 2024".to_string();
         let temp_dir = TempDir::new().unwrap();
 
         // Create a file with unknown extension

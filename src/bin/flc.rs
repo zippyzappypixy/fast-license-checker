@@ -51,9 +51,8 @@ pub struct Cli {
     pub no_color: bool,
 }
 
-
 use anyhow::{Context, Result};
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{fmt, EnvFilter};
 
 mod cli {
     pub mod output;
@@ -62,9 +61,9 @@ mod cli {
 use cli::output::OutputFormat;
 use fast_license_checker::{
     config::Config,
-    scanner::Scanner,
-    types::{ScanSummary, ScanResult, FileStatus},
     fixer::HeaderFixer,
+    scanner::Scanner,
+    types::{FileStatus, ScanResult, ScanSummary},
 };
 
 fn main() -> Result<()> {
@@ -74,8 +73,7 @@ fn main() -> Result<()> {
     init_tracing(cli.verbose, cli.quiet)?;
 
     // Load configuration
-    let config = load_config(&cli)
-        .context("Failed to load configuration")?;
+    let config = load_config(&cli).context("Failed to load configuration")?;
 
     tracing::debug!(?config, "Loaded configuration");
 
@@ -88,11 +86,8 @@ fn main() -> Result<()> {
     }
 
     // Run scan or fix
-    let summary = if cli.fix {
-        run_fix_mode(&cli, &config)?
-    } else {
-        run_scan_mode(&cli, &config)?
-    };
+    let summary =
+        if cli.fix { run_fix_mode(&cli, &config)? } else { run_scan_mode(&cli, &config)? };
 
     // Print results
     cli::output::print_summary(&summary, cli.output, !cli.no_color);
@@ -116,20 +111,16 @@ fn init_tracing(verbose: u8, quiet: bool) -> Result<()> {
         }
     };
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(level));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
 
-    fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .init();
+    fmt().with_env_filter(filter).with_target(false).init();
 
     Ok(())
 }
 
 fn run_scan_mode(cli: &Cli, config: &Config) -> Result<ScanSummary> {
-    let scanner = Scanner::new(cli.path.as_path(), config.clone())
-        .context("Failed to create scanner")?;
+    let scanner =
+        Scanner::new(cli.path.as_path(), config.clone()).context("Failed to create scanner")?;
 
     let summary = scanner.scan()?;
 
@@ -137,11 +128,10 @@ fn run_scan_mode(cli: &Cli, config: &Config) -> Result<ScanSummary> {
 }
 
 fn run_fix_mode(cli: &Cli, config: &Config) -> Result<ScanSummary> {
-    let fixer = HeaderFixer::new(cli.path.as_path(), config.clone())
-        .context("Failed to create fixer")?;
+    let fixer =
+        HeaderFixer::new(cli.path.as_path(), config.clone()).context("Failed to create fixer")?;
 
-    let summary = fixer.fix_all()
-        .context("Fix operation failed")?;
+    let summary = fixer.fix_all().context("Fix operation failed")?;
 
     Ok(summary)
 }
@@ -152,8 +142,7 @@ fn load_config(cli: &Cli) -> Result<Config> {
 
     // Load license header from file or text
     let license_header = if let Some(file_path) = &cli.license_file {
-        Some(fs::read_to_string(file_path)
-            .context("Failed to read license file")?)
+        Some(fs::read_to_string(file_path).context("Failed to read license file")?)
     } else if let Some(text) = &cli.header_text {
         Some(text.clone())
     } else {

@@ -35,12 +35,12 @@
 // Note: Lints are configured in Cargo.toml [lints] section
 
 // Module declarations will be added as we implement them
-pub mod config;
-pub mod types;
-pub mod scanner;
 pub mod checker;
-pub mod fixer;
+pub mod config;
 pub mod error;
+pub mod fixer;
+pub mod scanner;
+pub mod types;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

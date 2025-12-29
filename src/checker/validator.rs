@@ -12,9 +12,7 @@ pub fn validate_header_match(
     config_threshold: u8,
 ) -> crate::types::FileStatus {
     match header_match {
-        crate::checker::detector::HeaderMatch::Exact => {
-            crate::types::FileStatus::HasHeader
-        }
+        crate::checker::detector::HeaderMatch::Exact => crate::types::FileStatus::HasHeader,
         crate::checker::detector::HeaderMatch::Fuzzy { similarity } => {
             if *similarity >= config_threshold {
                 crate::types::FileStatus::HasHeader
@@ -24,9 +22,7 @@ pub fn validate_header_match(
                 }
             }
         }
-        crate::checker::detector::HeaderMatch::None => {
-            crate::types::FileStatus::MissingHeader
-        }
+        crate::checker::detector::HeaderMatch::None => crate::types::FileStatus::MissingHeader,
     }
 }
 
@@ -143,9 +139,9 @@ pub fn validate_header_format(header: &LicenseHeader) -> Result<(), String> {
     }
 
     // Check for common license keywords
-    let has_license_keyword = [
-        "license", "copyright", "licensed", "permission", "redistribution"
-    ].iter().any(|keyword| text.to_lowercase().contains(keyword));
+    let has_license_keyword = ["license", "copyright", "licensed", "permission", "redistribution"]
+        .iter()
+        .any(|keyword| text.to_lowercase().contains(keyword));
 
     if !has_license_keyword {
         return Err("Header does not appear to contain license text".to_string());
@@ -169,14 +165,7 @@ pub fn detect_malformed_header(content: &[u8]) -> Option<String> {
     let first_lines = content_str.lines().take(5).collect::<Vec<_>>().join("\n");
 
     // Check for partial matches that indicate a malformed header
-    let partial_indicators = [
-        "copyright",
-        "license",
-        "mit",
-        "apache",
-        "gpl",
-        "bsd",
-    ];
+    let partial_indicators = ["copyright", "license", "mit", "apache", "gpl", "bsd"];
 
     for indicator in &partial_indicators {
         if first_lines.to_lowercase().contains(indicator) {
@@ -296,7 +285,8 @@ mod tests {
 
     #[test]
     fn validate_header_format_no_keywords() {
-        let header = LicenseHeader::new("just some random text without keywords".to_string()).unwrap();
+        let header =
+            LicenseHeader::new("just some random text without keywords".to_string()).unwrap();
         assert!(validate_header_format(&header).is_err());
     }
 
@@ -306,7 +296,6 @@ mod tests {
         let header = LicenseHeader::new(long_text).unwrap();
         assert!(validate_header_format(&header).is_err());
     }
-
 
     #[test]
     fn detect_malformed_header_copyright() {

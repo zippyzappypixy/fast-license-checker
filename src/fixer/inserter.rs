@@ -9,10 +9,7 @@ use crate::types::{CommentStyle, LicenseHeader};
 
 /// Format license header with appropriate comment style
 #[tracing::instrument(skip(header))]
-pub fn format_header(
-    header: &LicenseHeader,
-    style: &CommentStyle,
-) -> String {
+pub fn format_header(header: &LicenseHeader, style: &CommentStyle) -> String {
     let mut result = String::new();
 
     for line in header.as_str().lines() {
@@ -44,27 +41,27 @@ pub fn insert_header(
     let insert_offset = header_start_offset(content);
     let formatted = format_header(header, style);
 
-    let mut result = Vec::with_capacity(content.len() + formatted.len());
+    let mut result = Vec::with_capacity(content.len().saturating_add(formatted.len()));
 
-    // Copy content before insertion point (shebang/xml)
-    result.extend_from_slice(&content[..insert_offset]);
+    // Copy content before insertion point (shebang/xml) - use safe slicing
+    if let Some(before) = content.get(..insert_offset) {
+        result.extend_from_slice(before);
+    }
 
     // Insert header
     result.extend_from_slice(formatted.as_bytes());
 
-    // Copy rest of content
-    result.extend_from_slice(&content[insert_offset..]);
+    // Copy rest of content - use safe slicing
+    if let Some(after) = content.get(insert_offset..) {
+        result.extend_from_slice(after);
+    }
 
     Ok(result)
 }
 
 /// Check if content already contains a license header
 #[tracing::instrument(skip(content, header))]
-pub fn contains_header(
-    content: &[u8],
-    header: &LicenseHeader,
-    style: &CommentStyle,
-) -> bool {
+pub fn contains_header(content: &[u8], header: &LicenseHeader, style: &CommentStyle) -> bool {
     let formatted = format_header(header, style);
     let formatted_bytes = formatted.as_bytes();
 
@@ -72,8 +69,16 @@ pub fn contains_header(
     // Start from the header insertion point
     let start_offset = header_start_offset(content);
 
-    if start_offset + formatted_bytes.len() <= content.len() {
-        content[start_offset..start_offset + formatted_bytes.len()] == *formatted_bytes
+    // Use safe bounds checking instead of array indexing
+    if let Some(end_offset) = start_offset.checked_add(formatted_bytes.len()) {
+        if end_offset <= content.len() {
+            content
+                .get(start_offset..end_offset)
+                .map(|slice| slice == formatted_bytes)
+                .unwrap_or(false)
+        } else {
+            false
+        }
     } else {
         false
     }
@@ -91,19 +96,28 @@ pub fn remove_header(
 
     let start_offset = header_start_offset(content);
 
-    // Check if header exists at expected location
-    if start_offset + formatted_bytes.len() <= content.len()
-        && content[start_offset..start_offset + formatted_bytes.len()] == *formatted_bytes
-    {
-        // Remove the header
-        let mut result = Vec::with_capacity(content.len() - formatted_bytes.len());
-        result.extend_from_slice(&content[..start_offset]);
-        result.extend_from_slice(&content[start_offset + formatted_bytes.len()..]);
-        Ok(result)
-    } else {
-        // Header not found, return original content
-        Ok(content.to_vec())
+    // Check if header exists at expected location using safe bounds checking
+    if let Some(end_offset) = start_offset.checked_add(formatted_bytes.len()) {
+        if end_offset <= content.len() {
+            if let Some(header_slice) = content.get(start_offset..end_offset) {
+                if header_slice == formatted_bytes {
+                    // Remove the header
+                    let mut result =
+                        Vec::with_capacity(content.len().saturating_sub(formatted_bytes.len()));
+                    if let Some(before) = content.get(..start_offset) {
+                        result.extend_from_slice(before);
+                    }
+                    if let Some(after) = content.get(end_offset..) {
+                        result.extend_from_slice(after);
+                    }
+                    return Ok(result);
+                }
+            }
+        }
     }
+
+    // Header not found, return original content
+    Ok(content.to_vec())
 }
 
 #[cfg(test)]
@@ -111,23 +125,20 @@ mod tests {
     use super::*;
     use crate::types::CommentStyle;
 
+    // Tests are allowed to use unwrap() for test setup
+    #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
     fn create_test_header() -> LicenseHeader {
-        let header_text = vec!["MIT License", "", "Copyright 2024 Test"].join("\n");
+        let header_text = ["MIT License", "", "Copyright 2024 Test"].join("\n");
         LicenseHeader::new(header_text).unwrap()
     }
 
     fn create_line_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "//".to_string(),
-            suffix: None,
-        }
+        CommentStyle { prefix: "//".to_string(), suffix: None }
     }
 
     fn create_block_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "/*".to_string(),
-            suffix: Some("*/".to_string()),
-        }
+        CommentStyle { prefix: "/*".to_string(), suffix: Some("*/".to_string()) }
     }
 
     #[test]
@@ -161,7 +172,11 @@ mod tests {
         let result = insert_header(content, &header, &style).unwrap();
 
         let expected_start = b"// MIT License\n//\n// Copyright 2024 Test\n\nfn main() {}\n";
-        assert_eq!(&result[..expected_start.len()], expected_start);
+        if let Some(prefix) = result.get(..expected_start.len()) {
+            assert_eq!(prefix, expected_start);
+        } else {
+            panic!("Result shorter than expected");
+        }
     }
 
     #[test]

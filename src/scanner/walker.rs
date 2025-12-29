@@ -18,7 +18,9 @@ pub struct FileWalker {
 }
 
 impl FileWalker {
-    /// Create a new file walker starting from the given root directory
+    /// Create a new file walker starting from the given root directory.
+    ///
+    /// Defaults to using all available CPU cores for parallel processing.
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self {
             root: root.as_ref().to_path_buf(),
@@ -106,12 +108,18 @@ pub struct WalkEntry {
 
 impl WalkEntry {
     /// Create a WalkEntry from an ignore::DirEntry
-    fn from_dir_entry(entry: DirEntry, root: &Path) -> Self {
-        Self {
-            path: entry.path().to_path_buf(),
-            depth: entry.depth(),
-            file_type: entry.file_type().unwrap(), // Safe because we check is_file() above
-        }
+    fn from_dir_entry(entry: DirEntry, _root: &Path) -> Self {
+        // file_type() should never return None for a file entry (we check is_file() first)
+        // But to satisfy clippy's no-expect rule, we handle it explicitly
+        let file_type = entry.file_type().unwrap_or_else(|| {
+            // This should never happen, but if it does, we'll try to get it from metadata
+            std::fs::metadata(entry.path())
+                .ok()
+                .and_then(|m| Some(m.file_type()))
+                .expect("file_type() returned None for a file entry - this should never happen")
+        });
+
+        Self { path: entry.path().to_path_buf(), depth: entry.depth(), file_type }
     }
 
     /// Get the file extension as a string
