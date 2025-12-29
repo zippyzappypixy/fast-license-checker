@@ -203,6 +203,7 @@ mod tests {
         let style = create_line_style();
 
         let formatted = format_header_for_search(&header, &style);
+        println!("Formatted: {:?}", formatted);
         let expected = "// MIT License\n\n// Copyright 2024 Test\n";
 
         assert_eq!(formatted, expected);

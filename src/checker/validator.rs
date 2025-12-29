@@ -137,10 +137,10 @@ pub fn validate_header_format(header: &LicenseHeader) -> Result<(), String> {
         return Err("Header is empty".to_string());
     }
 
-    // Note: Removed length check as per test expectations
-    // if text.len() > 10000 {
-    //     return Err("Header is too long (>10KB)".to_string());
-    // }
+    // Check reasonable length limits
+    if text.len() > 5000 {
+        return Err("Header is too long (>5KB)".to_string());
+    }
 
     // Check for common license keywords
     let has_license_keyword = [
