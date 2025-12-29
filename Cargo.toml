@@ -58,6 +58,9 @@ tempfile = "3"
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports"] }
 
+# Random number generation for benchmarks
+rand = "0.8"
+
 # Property-based testing
 proptest = "1"
 

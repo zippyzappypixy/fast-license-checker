@@ -7,6 +7,9 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use crate::error::{FixerError, Result};
 
 /// Write content to file atomically (write temp, then rename)
@@ -16,40 +19,42 @@ pub fn write_atomic(path: &Path, content: &[u8]) -> Result<()> {
         path: path.to_path_buf(),
         source: std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Path has no parent directory"
+            "Path has no parent directory",
         ),
     })?;
 
     // Create temp file in same directory (for atomic rename)
-    let temp_path = parent.join(format!(".{}.tmp",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("file")
-    ));
+    let temp_path = parent
+        .join(format!(".{}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
 
     // Write to temp file
     {
-        let mut file = File::create(&temp_path).map_err(|e| FixerError::WriteError {
-            path: temp_path.clone(),
-            source: e,
-        })?;
+        let mut file = File::create(&temp_path)
+            .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;
 
-        file.write_all(content).map_err(|e| FixerError::WriteError {
-            path: temp_path.clone(),
-            source: e,
-        })?;
+        // Preserve permissions if original file exists (Unix only)
+        if let Ok(metadata) = fs::metadata(path) {
+            #[cfg(unix)]
+            {
+                let mut perms = metadata.permissions();
+                // Ensure we have write permissions on the temp file regardless of source mode
+                perms.set_mode(perms.mode() | 0o200);
+                if let Err(e) = file.set_permissions(perms) {
+                    tracing::warn!("Failed to preserve file permissions: {}", e);
+                }
+            }
+        }
 
-        file.sync_all().map_err(|e| FixerError::WriteError {
-            path: temp_path.clone(),
-            source: e,
-        })?;
+        file.write_all(content)
+            .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;
+
+        file.sync_all()
+            .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;
     }
 
     // Atomic rename
-    fs::rename(&temp_path, path).map_err(|e| FixerError::WriteError {
-        path: path.to_path_buf(),
-        source: e,
-    })?;
+    fs::rename(&temp_path, path)
+        .map_err(|e| FixerError::WriteError { path: path.to_path_buf(), source: e })?;
 
     tracing::info!(path = %path.display(), "Fixed file");
 
@@ -59,18 +64,13 @@ pub fn write_atomic(path: &Path, content: &[u8]) -> Result<()> {
 /// Write content to file with backup (create .bak file)
 #[tracing::instrument(skip(content))]
 pub fn write_with_backup(path: &Path, content: &[u8]) -> Result<()> {
-    let backup_path = path.with_extension(format!("{}.bak",
-        path.extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-    ));
+    let backup_path = path
+        .with_extension(format!("{}.bak", path.extension().and_then(|e| e.to_str()).unwrap_or("")));
 
     // Create backup of original file
     if path.exists() {
-        fs::copy(path, &backup_path).map_err(|e| FixerError::WriteError {
-            path: backup_path.clone(),
-            source: e,
-        })?;
+        fs::copy(path, &backup_path)
+            .map_err(|e| FixerError::WriteError { path: backup_path.clone(), source: e })?;
     }
 
     // Write new content
@@ -92,9 +92,7 @@ pub fn is_writable(path: &Path) -> bool {
     } else {
         // If file doesn't exist, check if parent directory is writable
         if let Some(parent) = path.parent() {
-            fs::metadata(parent)
-                .map(|m| !m.permissions().readonly())
-                .unwrap_or(false)
+            fs::metadata(parent).map(|m| !m.permissions().readonly()).unwrap_or(false)
         } else {
             false
         }
@@ -104,12 +102,12 @@ pub fn is_writable(path: &Path) -> bool {
 /// Get file size before writing (for undo operations)
 #[tracing::instrument]
 pub fn get_file_size(path: &Path) -> Result<u64> {
-    fs::metadata(path)
-        .map(|m| m.len())
-        .map_err(|e| crate::error::LicenseCheckerError::Fixer(FixerError::WriteError {
+    fs::metadata(path).map(|m| m.len()).map_err(|e| {
+        crate::error::LicenseCheckerError::Fixer(FixerError::WriteError {
             path: path.to_path_buf(),
             source: e,
-        }))
+        })
+    })
 }
 
 /// Validate that content can be safely written
@@ -123,22 +121,23 @@ pub fn validate_content(content: &[u8]) -> Result<()> {
                 path: Path::new("<content>").to_path_buf(),
                 source: std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "Content is not valid UTF-8"
+                    "Content is not valid UTF-8",
                 ),
             }));
         }
     }
 
     // Check for reasonable file size (prevent accidental huge files)
-        if content.len() > 100 * 1024 * 1024 { // 100MB limit
-            return Err(crate::error::LicenseCheckerError::Fixer(FixerError::WriteError {
-                path: Path::new("<content>").to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Content is too large (>100MB)"
-                ),
-            }));
-        }
+    if content.len() > 100 * 1024 * 1024 {
+        // 100MB limit
+        return Err(crate::error::LicenseCheckerError::Fixer(FixerError::WriteError {
+            path: Path::new("<content>").to_path_buf(),
+            source: std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Content is too large (>100MB)",
+            ),
+        }));
+    }
 
     Ok(())
 }

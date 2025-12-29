@@ -11,7 +11,10 @@ pub enum HeaderMatch {
     /// Header found with exact match
     Exact,
     /// Header found with fuzzy match (similarity percentage)
-    Fuzzy { similarity: u8 },
+    Fuzzy {
+        /// Similarity score (0-100) indicating how closely the detected header matches the expected one
+        similarity: u8,
+    },
     /// No header found
     None,
 }
@@ -24,7 +27,7 @@ pub fn detect_header(
     style: &CommentStyle,
 ) -> HeaderMatch {
     let start_offset = crate::checker::prelude::effective_header_start(content);
-    let search_region = &content[start_offset..];
+    let search_region = content.get(start_offset..).unwrap_or(&[]);
 
     // Format expected header with comment style
     let formatted_header = format_header_for_search(expected, style);
@@ -103,8 +106,8 @@ pub fn fuzzy_match(content: &[u8], expected: &str) -> Option<u8> {
         return None; // Too short to be meaningful
     }
 
-    let content_prefix = &content[..min_len];
-    let expected_prefix = &expected_bytes[..min_len];
+    let content_prefix = content.get(..min_len).unwrap_or(&[]);
+    let expected_prefix = expected_bytes.get(..min_len).unwrap_or(&[]);
 
     let similarity = calculate_byte_similarity(content_prefix, expected_prefix);
 
@@ -117,16 +120,14 @@ pub fn fuzzy_match(content: &[u8], expected: &str) -> Option<u8> {
 
 /// Calculate similarity between two byte slices (0-100)
 #[tracing::instrument]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn calculate_byte_similarity(a: &[u8], b: &[u8]) -> u8 {
     if a.is_empty() && b.is_empty() {
         return 100;
     }
 
     // Find length of common prefix
-    let prefix_len = a.iter()
-        .zip(b.iter())
-        .take_while(|(x, y)| x == y)
-        .count();
+    let prefix_len = a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count();
 
     if prefix_len == 0 {
         return 0;
@@ -141,7 +142,7 @@ pub fn calculate_byte_similarity(a: &[u8], b: &[u8]) -> u8 {
 #[tracing::instrument(skip(content))]
 pub fn contains_any_license_header(content: &[u8]) -> bool {
     let start_offset = crate::checker::prelude::effective_header_start(content);
-    let search_region = &content[start_offset..];
+    let search_region = content.get(start_offset..).unwrap_or(&[]);
 
     // Look for common license keywords in first few lines
     let content_str = match std::str::from_utf8(search_region) {
@@ -184,17 +185,11 @@ mod tests {
     }
 
     fn create_line_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "//".to_string(),
-            suffix: None,
-        }
+        CommentStyle { prefix: "//".to_string(), suffix: None }
     }
 
     fn create_block_style() -> CommentStyle {
-        CommentStyle {
-            prefix: "/*".to_string(),
-            suffix: Some("*/".to_string()),
-        }
+        CommentStyle { prefix: "/*".to_string(), suffix: Some("*/".to_string()) }
     }
 
     #[test]
