@@ -431,8 +431,8 @@ mod tests {
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use proptest::prelude::*;
     use crate::types::{FileExtension, MaxHeaderBytes};
+    use proptest::prelude::*;
 
     proptest! {
         #[test]

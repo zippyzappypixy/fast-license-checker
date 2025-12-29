@@ -321,8 +321,8 @@ mod tests {
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use proptest::prelude::*;
     use crate::scanner::filter::{is_binary, is_valid_utf8};
+    use proptest::prelude::*;
 
     proptest! {
         #[test]

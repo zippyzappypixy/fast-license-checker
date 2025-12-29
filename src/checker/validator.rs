@@ -27,40 +27,27 @@ pub fn validate_header_match(
 }
 
 /// Calculate Levenshtein distance between two strings (more accurate similarity)
+/// Uses a stack-efficient algorithm to avoid O(N*M) heap allocations.
 #[tracing::instrument]
 #[allow(clippy::arithmetic_side_effects)]
+#[allow(clippy::unwrap_used)]
 pub fn levenshtein_distance(a: &str, b: &str) -> usize {
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
+    let b_len = b.chars().count();
+    // Re-use a single row buffer to reduce memory overhead
+    let mut cache: Vec<usize> = (0..=b_len).collect();
 
-    if a_chars.is_empty() {
-        return b_chars.len();
-    }
-    if b_chars.is_empty() {
-        return a_chars.len();
-    }
-
-    let mut matrix = vec![vec![0; b_chars.len() + 1]; a_chars.len() + 1];
-
-    // Initialize first row and column
-    for i in 0..=a_chars.len() {
-        matrix[i][0] = i;
-    }
-    for j in 0..=b_chars.len() {
-        matrix[0][j] = j;
-    }
-
-    // Fill the matrix
-    for (i, &a_char) in a_chars.iter().enumerate() {
-        for (j, &b_char) in b_chars.iter().enumerate() {
+    for (i, a_char) in a.chars().enumerate() {
+        let mut prev = i;
+        *cache.get_mut(0).unwrap() = i + 1;
+        for (j, b_char) in b.chars().enumerate() {
+            let current = *cache.get(j + 1).unwrap();
             let cost = if a_char == b_char { 0 } else { 1 };
-            matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1) // insertion
-                .min(matrix[i + 1][j] + 1) // deletion
-                .min(matrix[i][j] + cost); // substitution
+            *cache.get_mut(j + 1).unwrap() =
+                std::cmp::min(std::cmp::min(cache.get(j).unwrap() + 1, current + 1), prev + cost);
+            prev = current;
         }
     }
-
-    matrix[a_chars.len()][b_chars.len()]
+    *cache.get(b_len).unwrap()
 }
 
 /// Calculate similarity percentage using Levenshtein distance (0-100)
@@ -155,7 +142,7 @@ pub fn validate_header_format(header: &LicenseHeader) -> Result<(), String> {
 #[tracing::instrument(skip(content))]
 pub fn detect_malformed_header(content: &[u8]) -> Option<String> {
     let start_offset = crate::checker::prelude::effective_header_start(content);
-    let search_region = &content[start_offset..];
+    let search_region = content.get(start_offset..).unwrap_or(&[]);
 
     // Look for partial license indicators
     let content_str = match std::str::from_utf8(search_region) {

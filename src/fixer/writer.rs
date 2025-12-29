@@ -7,6 +7,9 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use crate::error::{FixerError, Result};
 
 /// Write content to file atomically (write temp, then rename)
@@ -28,6 +31,19 @@ pub fn write_atomic(path: &Path, content: &[u8]) -> Result<()> {
     {
         let mut file = File::create(&temp_path)
             .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;
+
+        // Preserve permissions if original file exists (Unix only)
+        if let Ok(metadata) = fs::metadata(path) {
+            #[cfg(unix)]
+            {
+                let mut perms = metadata.permissions();
+                // Ensure we have write permissions on the temp file regardless of source mode
+                perms.set_mode(perms.mode() | 0o200);
+                if let Err(e) = file.set_permissions(perms) {
+                    tracing::warn!("Failed to preserve file permissions: {}", e);
+                }
+            }
+        }
 
         file.write_all(content)
             .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;

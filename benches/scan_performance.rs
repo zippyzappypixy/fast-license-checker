@@ -1,6 +1,6 @@
 //! Performance benchmarks for scanning operations
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use fast_license_checker::{config::Config, scanner::Scanner};
 use std::fs;
 use std::path::Path;
@@ -76,8 +76,8 @@ fn bench_scan_small(c: &mut Criterion) {
 
     c.bench_function("scan_1k_files_warm", |b| {
         b.iter(|| {
-            let scanner = Scanner::new(temp_dir.path(), config.clone())
-                .expect("Failed to create scanner");
+            let scanner =
+                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
             black_box(scanner.scan())
         });
     });
@@ -92,8 +92,8 @@ fn bench_scan_medium(c: &mut Criterion) {
 
     c.bench_function("scan_10k_files_warm", |b| {
         b.iter(|| {
-            let scanner = Scanner::new(temp_dir.path(), config.clone())
-                .expect("Failed to create scanner");
+            let scanner =
+                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
             black_box(scanner.scan())
         });
     });
@@ -108,8 +108,8 @@ fn bench_scan_large(c: &mut Criterion) {
 
     c.bench_function("scan_100k_files_warm", |b| {
         b.iter(|| {
-            let scanner = Scanner::new(temp_dir.path(), config.clone())
-                .expect("Failed to create scanner");
+            let scanner =
+                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
             black_box(scanner.scan())
         });
     });
@@ -122,19 +122,15 @@ fn bench_parallel_jobs(c: &mut Criterion) {
     warm_cache(temp_dir.path());
 
     for num_jobs in &[1, 2, 4, 8] {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(num_jobs),
-            num_jobs,
-            |b, &num_jobs| {
-                b.iter(|| {
-                    let mut config = create_test_config();
-                    config.parallel_jobs = Some(num_jobs);
-                    let scanner = Scanner::new(temp_dir.path(), config)
-                        .expect("Failed to create scanner");
-                    black_box(scanner.scan())
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(num_jobs), num_jobs, |b, &num_jobs| {
+            b.iter(|| {
+                let mut config = create_test_config();
+                config.parallel_jobs = Some(num_jobs);
+                let scanner =
+                    Scanner::new(temp_dir.path(), config).expect("Failed to create scanner");
+                black_box(scanner.scan())
+            });
+        });
     }
     group.finish();
 }
