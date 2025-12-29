@@ -28,6 +28,7 @@ pub fn validate_header_match(
 
 /// Calculate Levenshtein distance between two strings (more accurate similarity)
 #[tracing::instrument]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
@@ -313,5 +314,42 @@ mod tests {
     fn detect_malformed_header_none() {
         let content = b"fn main() {\n    println!(\"hello\");\n}";
         assert!(detect_malformed_header(content).is_none());
+    }
+}
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn levenshtein_distance_never_panics(a in ".*", b in ".*") {
+            let _ = levenshtein_distance(&a, &b);
+        }
+
+        #[test]
+        fn levenshtein_distance_symmetric(a in "[a-zA-Z]{1,100}", b in "[a-zA-Z]{1,100}") {
+            let d1 = levenshtein_distance(&a, &b);
+            let d2 = levenshtein_distance(&b, &a);
+            assert_eq!(d1, d2, "Distance should be symmetric");
+        }
+
+        #[test]
+        fn levenshtein_distance_identity(s in "[a-zA-Z]{1,100}") {
+            let d = levenshtein_distance(&s, &s);
+            assert_eq!(d, 0, "Distance to self should be zero");
+        }
+
+        #[test]
+        fn levenshtein_similarity_bounded(a in ".*", b in ".*") {
+            let sim = levenshtein_similarity(&a, &b);
+            assert!(sim <= 100, "Similarity must be 0-100");
+        }
+
+        #[test]
+        fn advanced_fuzzy_match_never_panics(content in prop::collection::vec(0u8..255u8, 0..1000), expected in ".*") {
+            let _ = advanced_fuzzy_match(&content, &expected);
+        }
     }
 }

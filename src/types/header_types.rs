@@ -427,3 +427,45 @@ mod tests {
         assert_eq!(default_style.suffix, None);
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+    use crate::types::{FileExtension, MaxHeaderBytes};
+
+    proptest! {
+        #[test]
+        fn license_header_never_panics(s in ".*") {
+            // Should never panic, only return Result
+            let _ = LicenseHeader::new(s);
+        }
+
+        #[test]
+        fn license_header_valid_strings_roundtrip(s in "[a-zA-Z0-9 \n]{1,1000}") {
+            if let Ok(header) = LicenseHeader::new(s.clone()) {
+                let retrieved = header.as_str();
+                assert!(retrieved.trim() == s.trim());
+            }
+        }
+
+        #[test]
+        fn similarity_score_always_valid(n in 0u8..=255u8) {
+            let score = SimilarityScore::new(n);
+            assert!(score.value() <= 100);
+        }
+
+        #[test]
+        fn file_extension_never_panics(s in ".*") {
+            let _ = FileExtension::new(s);
+        }
+
+        #[test]
+        fn max_header_bytes_minimum_enforced(n in 0usize..10000usize) {
+            let result = MaxHeaderBytes::new(n);
+            if let Ok(bytes) = result {
+                assert!(bytes.value() >= 256usize);
+            }
+        }
+    }
+}

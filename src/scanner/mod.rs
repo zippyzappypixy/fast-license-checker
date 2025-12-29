@@ -317,3 +317,32 @@ mod tests {
         assert_eq!(summary.skipped, 1);
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+    use crate::scanner::filter::{is_binary, is_valid_utf8};
+
+    proptest! {
+        #[test]
+        fn binary_detection_never_panics(content in prop::collection::vec(0u8..255u8, 0..1000)) {
+            let _ = is_binary(&content);
+        }
+
+        #[test]
+        fn utf8_validation_never_panics(content in prop::collection::vec(0u8..255u8, 0..1000)) {
+            let _ = is_valid_utf8(&content);
+        }
+
+        #[test]
+        fn binary_files_always_skipped(
+            content in prop::collection::vec(0u8..255u8, 100..1000)
+        ) {
+            // If content has null bytes, should be detected as binary
+            if content.contains(&0u8) {
+                assert!(is_binary(&content));
+            }
+        }
+    }
+}

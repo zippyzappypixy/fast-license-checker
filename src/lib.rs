@@ -1,3 +1,5 @@
+#![allow(clippy::arithmetic_side_effects)]
+
 //! # Fast License Checker
 //!
 //! A blazing-fast library for checking and fixing license headers in source files.
