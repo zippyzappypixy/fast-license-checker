@@ -2385,7 +2385,7 @@ cargo install fast-license-checker
 \`\`\`
 
 ### Pre-built binaries
-Download from [Releases](https://github.com/xxx/fast-license-checker/releases)
+Download from [Releases](https://github.com/zippyzappypixy/fast-license-checker/releases)
 
 ## Usage
 

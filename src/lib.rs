@@ -1,4 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
 
 //! # Fast License Checker
 //!
