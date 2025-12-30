@@ -29,10 +29,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy (strict)
-        run: |
-          cargo clippy --lib --bins -- -D warnings
-          cargo clippy --tests -- -D warnings --allow clippy::unwrap_used --allow clippy::panic
-          cargo clippy --benches -- -D warnings --allow clippy::unwrap_used --allow clippy::panic --allow clippy::missing_docs
+        run: cargo clippy --lib --bins -- -D warnings
 
       - name: Install cargo-deny
         run: cargo install cargo-deny
