@@ -43,6 +43,7 @@ impl HeaderFixer {
     ///
     /// Returns a summary of the operation.
     #[tracing::instrument(skip(self))]
+    #[allow(clippy::arithmetic_side_effects)] // Intentional counter increments
     pub fn fix_all(&self) -> Result<ScanSummary> {
         use std::time::Instant;
 
@@ -173,8 +174,7 @@ impl HeaderFixer {
         })?;
 
         // Get comment style for this file
-        let extension =
-            path.extension().map(|ext| ext.as_str().to_string()).unwrap_or_else(|| "".to_string());
+        let extension = path.extension().map(|ext| ext.as_str().to_string()).unwrap_or_default();
         let style_config = self.config.comment_styles.get(&extension).ok_or_else(|| {
             FixerError::UnsupportedExtension {
                 extension: extension.to_string(),

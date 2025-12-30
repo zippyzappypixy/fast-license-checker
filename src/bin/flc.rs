@@ -1,4 +1,10 @@
-use clap::{Parser, ValueEnum};
+//! # Fast License Checker (flc)
+//!
+//! A blazing-fast CLI tool for license header verification and fixing.
+//! Scans directories to find files missing license headers and can automatically
+//! add them with proper comment styles for different file types.
+
+use clap::Parser;
 use std::path::PathBuf;
 
 /// Fast License Checker - Blazing fast license header verification
@@ -60,10 +66,7 @@ mod cli {
 
 use cli::output::OutputFormat;
 use fast_license_checker::{
-    config::Config,
-    fixer::HeaderFixer,
-    scanner::Scanner,
-    types::{FileStatus, ScanResult, ScanSummary},
+    config::Config, fixer::HeaderFixer, scanner::Scanner, types::ScanSummary,
 };
 
 fn main() -> Result<()> {
@@ -78,7 +81,7 @@ fn main() -> Result<()> {
     tracing::debug!(?config, "Loaded configuration");
 
     // Validate license header is provided
-    if config.license_header.as_str().is_empty() {
+    if config.license_header.is_empty() {
         anyhow::bail!(
             "No license header provided. Use --license <file> or --header <text>, \
              or add 'license_header' to your config file."
@@ -143,10 +146,8 @@ fn load_config(cli: &Cli) -> Result<Config> {
     // Load license header from file or text
     let license_header = if let Some(file_path) = &cli.license_file {
         Some(fs::read_to_string(file_path).context("Failed to read license file")?)
-    } else if let Some(text) = &cli.header_text {
-        Some(text.clone())
     } else {
-        None
+        cli.header_text.clone()
     };
 
     let overrides = CliOverrides {

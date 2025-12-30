@@ -198,6 +198,7 @@ fn default_comment_styles() -> HashMap<String, CommentStyleConfig> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

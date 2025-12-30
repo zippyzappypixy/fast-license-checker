@@ -65,6 +65,7 @@ pub fn effective_header_start(content: &[u8]) -> usize {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

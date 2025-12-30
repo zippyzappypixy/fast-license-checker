@@ -33,15 +33,13 @@ pub fn write_atomic(path: &Path, content: &[u8]) -> Result<()> {
             .map_err(|e| FixerError::WriteError { path: temp_path.clone(), source: e })?;
 
         // Preserve permissions if original file exists (Unix only)
+        #[cfg(unix)]
         if let Ok(metadata) = fs::metadata(path) {
-            #[cfg(unix)]
-            {
-                let mut perms = metadata.permissions();
-                // Ensure we have write permissions on the temp file regardless of source mode
-                perms.set_mode(perms.mode() | 0o200);
-                if let Err(e) = file.set_permissions(perms) {
-                    tracing::warn!("Failed to preserve file permissions: {}", e);
-                }
+            let mut perms = metadata.permissions();
+            // Ensure we have write permissions on the temp file regardless of source mode
+            perms.set_mode(perms.mode() | 0o200);
+            if let Err(e) = file.set_permissions(perms) {
+                tracing::warn!("Failed to preserve file permissions: {}", e);
             }
         }
 
@@ -114,7 +112,7 @@ pub fn get_file_size(path: &Path) -> Result<u64> {
 #[tracing::instrument(skip(content))]
 pub fn validate_content(content: &[u8]) -> Result<()> {
     // Basic validation - ensure content is valid UTF-8 if it appears to be text
-    if content.len() > 0 && content.len() <= 1024 {
+    if !content.is_empty() && content.len() <= 1024 {
         // For small files, validate UTF-8
         if std::str::from_utf8(content).is_err() {
             return Err(crate::error::LicenseCheckerError::Fixer(FixerError::WriteError {
@@ -143,6 +141,7 @@ pub fn validate_content(content: &[u8]) -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;

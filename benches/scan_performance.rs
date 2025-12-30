@@ -1,4 +1,5 @@
 //! Performance benchmarks for scanning operations
+// Benchmarks use various patterns that trigger clippy warnings but are acceptable for test code
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use fast_license_checker::{config::Config, scanner::Scanner};
@@ -42,33 +43,43 @@ fn create_realistic_test_files(dir: &Path, count: usize) {
             // Binary file simulation (with null bytes)
             let mut c = vec![0u8; size];
             rng.fill(&mut c[..]);
-            fs::write(&filepath, c).expect("Failed to write binary");
+            if let Err(e) = fs::write(&filepath, c) {
+                panic!("Failed to write binary: {}", e);
+            }
             continue;
         };
 
-        fs::write(&filepath, content).expect("Failed to write file");
+        if let Err(e) = fs::write(&filepath, content) {
+            panic!("Failed to write file: {}", e);
+        }
     }
 }
 
 /// Warm up filesystem cache by reading all files
 fn warm_cache(dir: &Path) {
-    for entry in fs::read_dir(dir).expect("Failed to read dir") {
-        if let Ok(entry) = entry {
-            if entry.path().is_file() {
-                let _ = fs::read(&entry.path());
-            }
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => panic!("Failed to read dir: {}", e),
+    };
+    for entry in entries.flatten() {
+        if entry.path().is_file() {
+            let _ = fs::read(entry.path());
         }
     }
 }
 
 fn create_test_config() -> Config {
-    let mut config = Config::default();
-    config.license_header = "MIT License\n\nCopyright (c) 2024 Test".to_string();
-    config
+    Config {
+        license_header: "MIT License\n\nCopyright (c) 2024 Test".to_string(),
+        ..Default::default()
+    }
 }
 
 fn bench_scan_small(c: &mut Criterion) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_dir = match TempDir::new() {
+        Ok(dir) => dir,
+        Err(e) => panic!("Failed to create temp dir: {}", e),
+    };
     create_realistic_test_files(temp_dir.path(), 1_000);
     warm_cache(temp_dir.path());
 
@@ -76,15 +87,20 @@ fn bench_scan_small(c: &mut Criterion) {
 
     c.bench_function("scan_1k_files_warm", |b| {
         b.iter(|| {
-            let scanner =
-                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
+            let scanner = match Scanner::new(temp_dir.path(), config.clone()) {
+                Ok(scanner) => scanner,
+                Err(e) => panic!("Failed to create scanner: {}", e),
+            };
             black_box(scanner.scan())
         });
     });
 }
 
 fn bench_scan_medium(c: &mut Criterion) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_dir = match TempDir::new() {
+        Ok(dir) => dir,
+        Err(e) => panic!("Failed to create temp dir: {}", e),
+    };
     create_realistic_test_files(temp_dir.path(), 10_000);
     warm_cache(temp_dir.path());
 
@@ -92,15 +108,20 @@ fn bench_scan_medium(c: &mut Criterion) {
 
     c.bench_function("scan_10k_files_warm", |b| {
         b.iter(|| {
-            let scanner =
-                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
+            let scanner = match Scanner::new(temp_dir.path(), config.clone()) {
+                Ok(scanner) => scanner,
+                Err(e) => panic!("Failed to create scanner: {}", e),
+            };
             black_box(scanner.scan())
         });
     });
 }
 
 fn bench_scan_large(c: &mut Criterion) {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_dir = match TempDir::new() {
+        Ok(dir) => dir,
+        Err(e) => panic!("Failed to create temp dir: {}", e),
+    };
     create_realistic_test_files(temp_dir.path(), 100_000);
     warm_cache(temp_dir.path());
 
@@ -108,8 +129,10 @@ fn bench_scan_large(c: &mut Criterion) {
 
     c.bench_function("scan_100k_files_warm", |b| {
         b.iter(|| {
-            let scanner =
-                Scanner::new(temp_dir.path(), config.clone()).expect("Failed to create scanner");
+            let scanner = match Scanner::new(temp_dir.path(), config.clone()) {
+                Ok(scanner) => scanner,
+                Err(e) => panic!("Failed to create scanner: {}", e),
+            };
             black_box(scanner.scan())
         });
     });
@@ -117,7 +140,10 @@ fn bench_scan_large(c: &mut Criterion) {
 
 fn bench_parallel_jobs(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_jobs");
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let temp_dir = match TempDir::new() {
+        Ok(dir) => dir,
+        Err(e) => panic!("Failed to create temp dir: {}", e),
+    };
     create_realistic_test_files(temp_dir.path(), 10_000);
     warm_cache(temp_dir.path());
 
@@ -126,8 +152,10 @@ fn bench_parallel_jobs(c: &mut Criterion) {
             b.iter(|| {
                 let mut config = create_test_config();
                 config.parallel_jobs = Some(num_jobs);
-                let scanner =
-                    Scanner::new(temp_dir.path(), config).expect("Failed to create scanner");
+                let scanner = match Scanner::new(temp_dir.path(), config) {
+                    Ok(scanner) => scanner,
+                    Err(e) => panic!("Failed to create scanner: {}", e),
+                };
                 black_box(scanner.scan())
             });
         });
@@ -135,6 +163,7 @@ fn bench_parallel_jobs(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark group for all scanning performance tests
 criterion_group!(
     benches,
     bench_scan_small,
@@ -142,4 +171,6 @@ criterion_group!(
     bench_scan_large,
     bench_parallel_jobs
 );
+
+/// Main entry point for running the benchmark suite
 criterion_main!(benches);

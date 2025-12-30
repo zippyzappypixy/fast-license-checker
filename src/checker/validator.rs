@@ -37,20 +37,38 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     for (i, a_char) in a.chars().enumerate() {
         let mut prev = i;
-        cache[0] = i + 1; // Safe indexing (bounds checked)
+        // cache[0] is always valid since cache.len() = b_len + 1 >= 1
+        if let Some(value) = cache.get_mut(0) {
+            *value = i + 1;
+        }
 
         for (j, b_char) in b.chars().enumerate() {
-            let current = cache[j + 1];
-            let cost = if a_char == b_char { 0 } else { 1 };
+            // j goes from 0 to b_len-1, so j+1 goes from 1 to b_len
+            // cache has length b_len + 1, so all these indices are valid
+            if let Some(current) = cache.get(j + 1) {
+                let current_val = *current;
+                let cost = if a_char == b_char { 0 } else { 1 };
 
-            // Calculate minimum operation cost
-            let min_cost = std::cmp::min(std::cmp::min(cache[j] + 1, current + 1), prev + cost);
+                // Calculate minimum operation cost
+                let min_cost = if let Some(cache_j) = cache.get(j) {
+                    std::cmp::min(std::cmp::min(*cache_j + 1, current_val + 1), prev + cost)
+                } else {
+                    std::cmp::min(current_val + 1, prev + cost)
+                };
 
-            cache[j + 1] = min_cost;
-            prev = current;
+                if let Some(cache_j_plus_1) = cache.get_mut(j + 1) {
+                    *cache_j_plus_1 = min_cost;
+                }
+                prev = current_val;
+            }
         }
     }
-    cache[b_len]
+
+    // cache[b_len] is always valid since cache.len() = b_len + 1
+    match cache.get(b_len) {
+        Some(&value) => value,
+        None => 0, // This should never happen
+    }
 }
 
 /// Calculate similarity percentage using Levenshtein distance (0-100)
@@ -311,6 +329,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use proptest::prelude::*;

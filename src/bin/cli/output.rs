@@ -32,6 +32,7 @@ pub fn print_summary(summary: &ScanSummary, format: OutputFormat, color: bool) {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)] // Intentional arithmetic for progress bar calculation
 fn print_text(summary: &ScanSummary, color: bool) {
     let mut stdout = std::io::stdout().lock();
 
@@ -171,15 +172,17 @@ fn print_json(summary: &ScanSummary) {
     let mut stdout = std::io::stdout().lock();
 
     // Create JSON structure
-    let json = serde_json::json!({
-        "summary": {
-            "total": summary.total,
-            "passed": summary.passed,
-            "failed": summary.failed,
-            "skipped": summary.skipped
-        },
-        "results": []  // In a full implementation, this would contain detailed results
-    });
+    let mut summary_obj = serde_json::Map::new();
+    summary_obj.insert("total".to_string(), serde_json::Value::Number(summary.total.into()));
+    summary_obj.insert("passed".to_string(), serde_json::Value::Number(summary.passed.into()));
+    summary_obj.insert("failed".to_string(), serde_json::Value::Number(summary.failed.into()));
+    summary_obj.insert("skipped".to_string(), serde_json::Value::Number(summary.skipped.into()));
+
+    let mut root_obj = serde_json::Map::new();
+    root_obj.insert("summary".to_string(), serde_json::Value::Object(summary_obj));
+    root_obj.insert("results".to_string(), serde_json::Value::Array(Vec::new()));
+
+    let json = serde_json::Value::Object(root_obj);
 
     // JSON serialization should never fail for our simple structure
     if let Ok(json_str) = serde_json::to_string_pretty(&json) {
