@@ -29,8 +29,7 @@ pub fn validate_header_match(
 /// Calculate Levenshtein distance between two strings (more accurate similarity)
 /// Uses a stack-efficient algorithm to avoid O(N*M) heap allocations.
 #[tracing::instrument]
-#[allow(clippy::arithmetic_side_effects)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::arithmetic_side_effects)] // Allowed locally for this specific algorithm
 pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     let b_len = b.chars().count();
     // Re-use a single row buffer to reduce memory overhead
@@ -38,20 +37,25 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     for (i, a_char) in a.chars().enumerate() {
         let mut prev = i;
-        *cache.get_mut(0).unwrap() = i + 1;
+        cache[0] = i + 1; // Safe indexing (bounds checked)
+
         for (j, b_char) in b.chars().enumerate() {
-            let current = *cache.get(j + 1).unwrap();
+            let current = cache[j + 1];
             let cost = if a_char == b_char { 0 } else { 1 };
-            *cache.get_mut(j + 1).unwrap() =
-                std::cmp::min(std::cmp::min(cache.get(j).unwrap() + 1, current + 1), prev + cost);
+
+            // Calculate minimum operation cost
+            let min_cost = std::cmp::min(std::cmp::min(cache[j] + 1, current + 1), prev + cost);
+
+            cache[j + 1] = min_cost;
             prev = current;
         }
     }
-    *cache.get(b_len).unwrap()
+    cache[b_len]
 }
 
 /// Calculate similarity percentage using Levenshtein distance (0-100)
 #[tracing::instrument]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn levenshtein_similarity(a: &str, b: &str) -> u8 {
     let distance = levenshtein_distance(a, b);
     let max_len = a.len().max(b.len());
@@ -66,6 +70,7 @@ pub fn levenshtein_similarity(a: &str, b: &str) -> u8 {
 
 /// Advanced fuzzy matching using multiple algorithms
 #[tracing::instrument(skip(content, expected))]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn advanced_fuzzy_match(content: &[u8], expected: &str) -> Option<u8> {
     if content.is_empty() || expected.is_empty() {
         return None;
@@ -165,6 +170,7 @@ pub fn detect_malformed_header(content: &[u8]) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::checker::detector::HeaderMatch;
