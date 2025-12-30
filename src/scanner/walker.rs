@@ -70,7 +70,8 @@ impl FileWalker {
                             // Only process files
                             if let Some(file_type) = dir_entry.file_type() {
                                 if file_type.is_file() {
-                                    let walk_entry = WalkEntry::from_dir_entry(dir_entry, &root, file_type);
+                                    let walk_entry =
+                                        WalkEntry::from_dir_entry(dir_entry, &root, file_type);
                                     let _ = tx.send(Ok(walk_entry));
                                 }
                             }

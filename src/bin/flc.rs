@@ -66,10 +66,7 @@ mod cli {
 
 use cli::output::OutputFormat;
 use fast_license_checker::{
-    config::Config,
-    fixer::HeaderFixer,
-    scanner::Scanner,
-    types::ScanSummary,
+    config::Config, fixer::HeaderFixer, scanner::Scanner, types::ScanSummary,
 };
 
 fn main() -> Result<()> {

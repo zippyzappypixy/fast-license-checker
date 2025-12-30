@@ -51,10 +51,7 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
 
                 // Calculate minimum operation cost
                 let min_cost = if let Some(cache_j) = cache.get(j) {
-                    std::cmp::min(
-                        std::cmp::min(*cache_j + 1, current_val + 1),
-                        prev + cost
-                    )
+                    std::cmp::min(std::cmp::min(*cache_j + 1, current_val + 1), prev + cost)
                 } else {
                     std::cmp::min(current_val + 1, prev + cost)
                 };
