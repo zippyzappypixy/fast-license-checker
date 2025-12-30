@@ -358,12 +358,11 @@ mod tests {
 
     #[test]
     fn file_path_invalid_utf8() {
-        use std::ffi::OsStr;
-        use std::os::unix::ffi::OsStrExt;
-
         // Create a path with invalid UTF-8 bytes (Unix-specific)
         #[cfg(unix)]
         {
+            use std::ffi::OsStr;
+            use std::os::unix::ffi::OsStrExt;
             let invalid_bytes = b"\xFF\xFE\xFD";
             let os_str = OsStr::from_bytes(invalid_bytes);
             let path = PathBuf::from(os_str);
