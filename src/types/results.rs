@@ -322,6 +322,7 @@ impl std::fmt::Display for ScanSummary {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

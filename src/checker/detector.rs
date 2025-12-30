@@ -176,6 +176,7 @@ pub fn contains_any_license_header(content: &[u8]) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::types::CommentStyle;

@@ -80,7 +80,7 @@ fn load_from_file(path: &Path) -> Result<Config> {
             message: format!("Invalid JSON format: {}", e),
         })
     } else {
-        toml::from_str(&content).map_err(|e| ConfigError::Parse(e))
+        toml::from_str(&content).map_err(ConfigError::Parse)
     }?;
 
     Ok(config)
@@ -194,16 +194,16 @@ pub fn create_config_template(path: &Path, format: &str) -> Result<()> {
             let mut template = String::from("# Fast License Checker Configuration\n");
             template.push_str("license_header = \"\"\"\n");
             template.push_str("Copyright 2024 Your Organization\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("Licensed under the MIT License.\n");
             template.push_str("\"\"\"\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Comment styles per file extension (defaults provided)\n");
             template.push_str("# [comment_styles]\n");
             template.push_str("# rs = { prefix = \"//\" }\n");
             template.push_str("# py = { prefix = \"#\" }\n");
             template.push_str("# css = { prefix = \"/*\", suffix = \"*/\" }\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Additional ignore patterns (beyond .gitignore)\n");
             template.push_str("ignore_patterns = [\n");
             template.push_str("    \"*.tmp\",\n");
@@ -211,16 +211,16 @@ pub fn create_config_template(path: &Path, format: &str) -> Result<()> {
             template.push_str("    \"target/\",\n");
             template.push_str("    \"node_modules/\",\n");
             template.push_str("]\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Maximum bytes to read from file start\n");
             template.push_str("max_header_bytes = 8192\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Skip empty files\n");
             template.push_str("skip_empty_files = true\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Number of parallel jobs (default: number of CPU cores)\n");
             template.push_str("# parallel_jobs = 4\n");
-            template.push_str("\n");
+            template.push('\n');
             template.push_str("# Similarity threshold for malformed header detection (0-100)\n");
             template.push_str("similarity_threshold = 70\n");
             template

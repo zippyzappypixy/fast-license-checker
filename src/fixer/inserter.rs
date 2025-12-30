@@ -121,13 +121,13 @@ pub fn remove_header(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::types::CommentStyle;
 
     // Tests are allowed to use unwrap() for test setup
     #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
-
     fn create_test_header() -> LicenseHeader {
         let header_text = ["MIT License", "", "Copyright 2024 Test"].join("\n");
         LicenseHeader::new(header_text).unwrap()

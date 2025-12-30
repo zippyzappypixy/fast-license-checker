@@ -47,7 +47,7 @@ impl Scanner {
             return Err(crate::error::LicenseCheckerError::Scanner(ScannerError::Io {
                 path: root_path.to_path_buf(),
                 source: std::io::Error::new(
-                    std::io::ErrorKind::NotADirectory,
+                    std::io::ErrorKind::InvalidInput,
                     "Root path is not a directory",
                 ),
             }));
@@ -55,7 +55,7 @@ impl Scanner {
 
         let walker = FileWalker::new(root_path)
             .with_ignores(config.ignore_patterns.clone())
-            .with_parallelism(config.parallel_jobs.unwrap_or_else(|| num_cpus::get()));
+            .with_parallelism(config.parallel_jobs.unwrap_or(num_cpus::get()));
 
         // Create header checker for actual header detection
         let checker = HeaderChecker::new(&config)?;
@@ -168,6 +168,7 @@ impl Scanner {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;
@@ -320,7 +321,6 @@ mod tests {
 
 #[cfg(test)]
 mod proptests {
-    use super::*;
     use crate::scanner::filter::{is_binary, is_valid_utf8};
     use proptest::prelude::*;
 

@@ -70,7 +70,7 @@ impl FileWalker {
                             // Only process files
                             if let Some(file_type) = dir_entry.file_type() {
                                 if file_type.is_file() {
-                                    let walk_entry = WalkEntry::from_dir_entry(dir_entry, &root);
+                                    let walk_entry = WalkEntry::from_dir_entry(dir_entry, &root, file_type);
                                     let _ = tx.send(Ok(walk_entry));
                                 }
                             }
@@ -108,17 +108,7 @@ pub struct WalkEntry {
 
 impl WalkEntry {
     /// Create a WalkEntry from an ignore::DirEntry
-    fn from_dir_entry(entry: DirEntry, _root: &Path) -> Self {
-        // file_type() should never return None for a file entry (we check is_file() first)
-        // But to satisfy clippy's no-expect rule, we handle it explicitly
-        let file_type = entry.file_type().unwrap_or_else(|| {
-            // This should never happen, but if it does, we'll try to get it from metadata
-            std::fs::metadata(entry.path())
-                .ok()
-                .and_then(|m| Some(m.file_type()))
-                .expect("file_type() returned None for a file entry - this should never happen")
-        });
-
+    fn from_dir_entry(entry: DirEntry, _root: &Path, file_type: std::fs::FileType) -> Self {
         Self { path: entry.path().to_path_buf(), depth: entry.depth(), file_type }
     }
 
@@ -144,6 +134,7 @@ impl WalkEntry {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::fs;

@@ -185,9 +185,12 @@ pub enum ValidationError {
 
 // Re-export common error types for convenience
 pub use LicenseCheckerError as Error;
+
+/// Convenience type alias for Results with LicenseCheckerError
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

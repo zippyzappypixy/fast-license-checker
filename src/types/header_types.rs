@@ -225,6 +225,7 @@ impl std::fmt::Display for SimilarityScore {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -429,6 +430,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use crate::types::{FileExtension, MaxHeaderBytes};
