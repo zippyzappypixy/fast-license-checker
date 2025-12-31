@@ -3,7 +3,6 @@
 Blazing-fast license header verification for your codebase.
 
 [![CI](https://github.com/zippyzappypixy/fast-license-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/zippyzappypixy/fast-license-checker/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/zippyzappypixy/fast-license-checker/branch/main/graph/badge.svg)](https://codecov.io/gh/zippyzappypixy/fast-license-checker)
 ![Benchmark](https://img.shields.io/badge/100K%20files-407ms-brightgreen)
 
 ## Features
