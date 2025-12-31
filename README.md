@@ -117,7 +117,7 @@ cargo install cargo-criterion
 cargo bench -- scan
 
 # View HTML report
-open docs/benchmark/index.html
+open docs/benchmarks/index.html
 ```
 
 > **Note**: First run is slower due to disk cache warming.
@@ -152,7 +152,7 @@ lua = { prefix = "--" }                    # Lua line comments
 ### GitHub Actions
 ```yaml
 - name: Check license headers
-  uses: zippyzappypixy/fast-license-checker@v1
+  uses: zippyzappypixy/fast-license-checker@v0.1.0
   with:
     path: '.'
     header: 'Copyright (c) 2024 My Company'
