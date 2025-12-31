@@ -1,6 +1,8 @@
 //! Performance benchmarks for scanning operations
 // Benchmarks use various patterns that trigger clippy warnings but are acceptable for test code
 
+#![allow(missing_docs, unused_attributes)]
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use fast_license_checker::{config::Config, scanner::Scanner};
 use std::fs;
@@ -163,7 +165,6 @@ fn bench_parallel_jobs(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark group for all scanning performance tests
 criterion_group!(
     benches,
     bench_scan_small,
@@ -172,5 +173,4 @@ criterion_group!(
     bench_parallel_jobs
 );
 
-/// Main entry point for running the benchmark suite
 criterion_main!(benches);

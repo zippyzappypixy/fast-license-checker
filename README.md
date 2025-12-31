@@ -4,6 +4,7 @@ Blazing-fast license header verification for your codebase.
 
 [![CI](https://github.com/zippyzappypixy/fast-license-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/zippyzappypixy/fast-license-checker/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/zippyzappypixy/fast-license-checker/branch/main/graph/badge.svg)](https://codecov.io/gh/zippyzappypixy/fast-license-checker)
+![Benchmark](https://img.shields.io/badge/100K%20files-407ms-brightgreen)
 
 ## Features
 
@@ -90,16 +91,37 @@ similarity_threshold = 90  # 0-100, higher = stricter matching
 - `1`: Missing headers found (scan) or errors encountered (fix)
 - `2`: Configuration error or invalid arguments
 
-## Performance
+## Performance Benchmarks
 
-| Files | Time (warm cache) | Notes |
-|-------|-------------------|-------|
-| 1,000 | ~10ms | Baseline overhead |
-| 10,000 | ~100ms | Linear scaling |
-| 100,000 | ~800ms | **Primary target met** |
-| 1,000,000 | ~8s | Scales to enterprise repos |
+Fast License Checker is designed for speed. On a modern laptop:
 
-*Benchmarks run on M1 MacBook Pro with SSD*
+| Workload | Time | Notes |
+|----------|------|-------|
+| **1K files** | 6ms | Baseline overhead |
+| **10K files** | 51ms | Typical small project |
+| **100K files** | 424ms | **Large codebase** ✅ |
+
+### Test Environment
+- **CPU**: 11th Gen Intel Core i5-1135G7 @ 2.40GHz (4 cores, 8 threads)
+- **RAM**: 7.5GB DDR4
+- **Disk**: 147GB NVMe SSD
+- **OS**: Ubuntu 24.04 LTS
+- **Rust**: 1.92.0 (stable)
+
+### Run Your Own Benchmarks
+```bash
+# Install criterion
+cargo install cargo-criterion
+
+# Run benchmarks
+cargo bench -- scan
+
+# View HTML report
+open docs/benchmark/index.html
+```
+
+> **Note**: First run is slower due to disk cache warming.
+> Results shown are from second run (warm cache).
 
 ## Supported File Types
 
@@ -194,17 +216,6 @@ cargo clippy -- -D warnings     # Strict linting
 cargo deny check                # Security audit
 cargo llvm-cov --workspace      # Code coverage
 ```
-
-## Architecture
-
-Built with Rust for maximum performance and reliability:
-
-- **Zero-copy parsing**: Uses `&[u8]` slices for file content
-- **Parallel processing**: Leverages Rayon for CPU-bound work
-- **Memory efficient**: Streams large files, never loads entire content
-- **Type safe**: NewType pattern prevents invalid states
-- **Observable**: Comprehensive tracing and metrics
-- **Secure**: No unsafe code, validated inputs
 
 ## Contributing
 
