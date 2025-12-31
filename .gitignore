@@ -29,6 +29,7 @@ coverage/
 
 # Benchmark results
 target/criterion/
+local_docs/
 
 # Temporary files
 *.tmp
